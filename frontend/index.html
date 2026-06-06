@@ -225,48 +225,57 @@ header{
 /* ── DECISION PANEL ──────────────────────────────────── */
 .decision-panel{flex:1;display:flex;flex-direction:column;gap:0;overflow:hidden}
 .decision-body{
-  display:grid;grid-template-columns:1fr 1fr;
-  gap:0;flex:1;min-height:0;overflow:hidden;
+  display:flex;flex-direction:column;
+  flex:1;min-height:0;overflow:hidden;
+}
+.decision-top{
+  display:flex;flex:1;min-height:0;overflow:hidden;
 }
 .dir-section{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:12px 20px;border-right:1px solid var(--border);
+  padding:10px 24px;border-right:1px solid var(--border);
+  flex-shrink:0;
 }
 .dir-arrow-wrap{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  width:90px;height:90px;border-radius:50%;
+  width:84px;height:84px;border-radius:50%;
   border:2px solid var(--border2);
   background:rgba(0,0,0,0.3);
   margin-bottom:8px;
   transition:border-color .5s,box-shadow .5s;
   position:relative;
 }
-.dir-arrow-wrap.bull{border-color:rgba(14,203,129,.5);box-shadow:0 0 30px rgba(14,203,129,.15)}
-.dir-arrow-wrap.bear{border-color:rgba(246,70,93,.5);box-shadow:0 0 30px rgba(246,70,93,.15)}
-.dir-arrow{font-size:32px;line-height:1;transition:all .4s}
+.dir-arrow-wrap.bull{border-color:rgba(14,203,129,.5);box-shadow:0 0 28px rgba(14,203,129,.15)}
+.dir-arrow-wrap.bear{border-color:rgba(246,70,93,.5);box-shadow:0 0 28px rgba(246,70,93,.15)}
+.dir-arrow{font-size:30px;line-height:1;transition:all .4s}
 .dir-arrow.bull{color:var(--bull)}
 .dir-arrow.bear{color:var(--bear)}
 .dir-arrow.neutral{color:var(--txt2)}
-.dir-name{font-size:17px;font-weight:700;letter-spacing:.08em;transition:color .4s}
+.dir-name{font-size:16px;font-weight:700;letter-spacing:.08em;transition:color .4s}
 .dir-name.bull{color:var(--bull)}
 .dir-name.bear{color:var(--bear)}
 .dir-name.neutral{color:var(--txt2)}
 
 .gauge-section{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:8px 14px;gap:8px;
+  display:flex;align-items:center;justify-content:center;
+  flex:1;padding:10px;
 }
-.gauge-svg{width:148px;height:82px}
+.gauge-svg{width:160px;height:96px}
 .gauge-pct{fill:var(--txt);font-family:var(--mono);font-size:22px;font-weight:600}
 .gauge-lbl{fill:var(--txt3);font-family:var(--sans);font-size:9px;letter-spacing:.12em}
-.trade-params{width:100%;display:flex;flex-direction:column;gap:6px}
+.params-strip{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:6px;padding:8px 14px 10px;
+  border-top:1px solid var(--border);
+  flex-shrink:0;
+}
 .param-row{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:4px 10px;border-radius:6px;background:var(--card2);
+  display:flex;flex-direction:column;gap:2px;
+  padding:5px 10px;border-radius:6px;background:var(--card2);
   border:1px solid var(--border);
 }
-.param-lbl{font-size:9px;letter-spacing:.1em;color:var(--txt3);text-transform:uppercase}
-.param-val{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--txt)}
+.param-lbl{font-size:8px;letter-spacing:.1em;color:var(--txt3);text-transform:uppercase}
+.param-val{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--txt)}
 .param-val.bull{color:var(--bull)}
 .param-val.bear{color:var(--bear)}
 /* ── EXECUTION BAR ───────────────────────────────────── */
@@ -742,41 +751,44 @@ footer .sep{color:var(--border2)}
         <span class="panel-tag" id="lastTs">Waiting...</span>
       </div>
       <div class="decision-body">
-        <!-- Direction -->
-        <div class="dir-section">
-          <div class="dir-arrow-wrap neutral" id="dirWrap">
-            <div class="dir-arrow neutral" id="dirArrow">—</div>
+        <div class="decision-top">
+          <!-- Direction -->
+          <div class="dir-section">
+            <div class="dir-arrow-wrap neutral" id="dirWrap">
+              <div class="dir-arrow neutral" id="dirArrow">—</div>
+            </div>
+            <div class="dir-name neutral" id="dirName">AWAITING</div>
           </div>
-          <div class="dir-name neutral" id="dirName">AWAITING</div>
+          <!-- Confidence Gauge -->
+          <div class="gauge-section">
+            <svg viewBox="0 0 200 120" class="gauge-svg">
+              <path d="M20 100 A80 80 0 0 1 180 100" stroke="#1E2530" stroke-width="10" fill="none" stroke-linecap="round"/>
+              <path id="gaugeArc" d="M20 100 A80 80 0 0 1 180 100"
+                stroke="#00D4D4" stroke-width="10" fill="none" stroke-linecap="round"
+                stroke-dasharray="251" stroke-dashoffset="251"
+                style="transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1),stroke .5s"/>
+              <text x="100" y="90" class="gauge-pct" id="gaugePct" text-anchor="middle">0%</text>
+              <text x="100" y="111" class="gauge-lbl" text-anchor="middle">CONFIDENCE</text>
+            </svg>
+          </div>
         </div>
-        <!-- Gauge + params -->
-        <div class="gauge-section">
-          <svg viewBox="0 0 200 120" class="gauge-svg">
-            <path d="M20 100 A80 80 0 0 1 180 100" stroke="#1E2530" stroke-width="10" fill="none" stroke-linecap="round"/>
-            <path id="gaugeArc" d="M20 100 A80 80 0 0 1 180 100"
-              stroke="#00D4D4" stroke-width="10" fill="none" stroke-linecap="round"
-              stroke-dasharray="251" stroke-dashoffset="251"
-              style="transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1),stroke .5s"/>
-            <text x="100" y="90" class="gauge-pct" id="gaugePct" text-anchor="middle">0%</text>
-            <text x="100" y="111" class="gauge-lbl" text-anchor="middle">CONFIDENCE</text>
-          </svg>
-          <div class="trade-params">
-            <div class="param-row">
-              <span class="param-lbl">Entry</span>
-              <span class="param-val" id="pEntry">—</span>
-            </div>
-            <div class="param-row">
-              <span class="param-lbl" id="lblSL">Stop Loss</span>
-              <span class="param-val bear" id="pSL">—</span>
-            </div>
-            <div class="param-row">
-              <span class="param-lbl" id="lblTP">Take Profit</span>
-              <span class="param-val bull" id="pTP">—</span>
-            </div>
-            <div class="param-row">
-              <span class="param-lbl">Size</span>
-              <span class="param-val" id="pSize">—</span>
-            </div>
+        <!-- Trade Params — 4-column strip, always visible -->
+        <div class="params-strip">
+          <div class="param-row">
+            <span class="param-lbl">Entry</span>
+            <span class="param-val" id="pEntry">—</span>
+          </div>
+          <div class="param-row">
+            <span class="param-lbl" id="lblSL">Stop Loss</span>
+            <span class="param-val bear" id="pSL">—</span>
+          </div>
+          <div class="param-row">
+            <span class="param-lbl" id="lblTP">Take Profit</span>
+            <span class="param-val bull" id="pTP">—</span>
+          </div>
+          <div class="param-row">
+            <span class="param-lbl">Size</span>
+            <span class="param-val" id="pSize">—</span>
           </div>
         </div>
       </div>
