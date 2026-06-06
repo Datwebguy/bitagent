@@ -1,10 +1,4 @@
-#!/usr/bin/env python3
-"""
-BitAgent Server  -  FastAPI + WebSocket
-Run:  python server.py
-Open: http://localhost:8000
-"""
-import asyncio, json
+import asyncio, json, os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +20,9 @@ from agent import (
     LOOP_SECS, EXEC_COOLDOWN, MAX_DAILY_TRADES, EXEC_MAX_PCT,
 )
 
+AUTH_ERROR_CODES = {"40001", "40002", "40003", "40004", "40005", "40031"}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _agent_task
@@ -33,21 +30,25 @@ async def lifespan(app: FastAPI):
     yield
     _agent_task.cancel()
 
-app = FastAPI(title="BitAgent", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-_clients:    Set[WebSocket] = set()
-_latest:     dict           = {}
-_cycle                      = 0
-_start                      = datetime.now()
-_sim_pnl                    = 0.0
-_balance                    = 0.0
-_history:    list           = []
-_last_price                 = 0.0
-_last_dir                   = "FLAT"
-_agent_task                 = None
-_consecutive_errors         = 0
-MAX_CONSECUTIVE_ERRORS      = 5
+app = FastAPI(title="BitAgent", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+)
+
+_clients:           Set[WebSocket] = set()
+_latest:            dict           = {}
+_history:           list           = []
+_cycle:             int            = 0
+_sim_pnl:           float          = 0.0
+_balance:           float          = 0.0
+_last_price:        float          = 0.0
+_last_dir:          str            = "FLAT"
+_agent_task                        = None
+_consecutive_errors: int           = 0
+
+MAX_CONSECUTIVE_ERRORS = 5
+_start = datetime.now()
 
 
 async def _broadcast(data: dict):
@@ -62,6 +63,7 @@ async def _broadcast(data: dict):
 
 async def agent_loop():
     global _cycle, _sim_pnl, _last_price, _last_dir, _balance, _consecutive_errors
+
     while True:
         if not credentials_set():
             await asyncio.sleep(2)
@@ -69,7 +71,7 @@ async def agent_loop():
 
         _cycle += 1
         try:
-            signals   = {
+            signals  = {
                 "technical":  get_technical_signal(),
                 "sentiment":  get_sentiment_signal(),
                 "momentum":   get_momentum_signal(),
@@ -81,7 +83,7 @@ async def agent_loop():
             price     = signals["technical"]["price"]
             _balance  = get_futures_balance()
 
-            # Running PnL tracker (resets on restart intentionally — use trade journal for history)
+            # Session PnL tracker — resets on restart; see trade journal for history
             if _last_dir == "LONG" and _last_price > 0:
                 _sim_pnl += (price - _last_price) / _last_price * 100
             elif _last_dir == "SHORT" and _last_price > 0:
@@ -90,13 +92,13 @@ async def agent_loop():
             _last_dir   = decision["direction"]
 
             _history.append({
-                "ts":         datetime.now().strftime("%H:%M:%S"),
-                "direction":  decision["direction"],
-                "confidence": decision["confidence"],
-                "price":      price,
-                "size_pct":   decision["size_pct"],
-                "executed":   execution.get("executed", False),
-                "exec_action":execution.get("action", ""),
+                "ts":          datetime.now().strftime("%H:%M:%S"),
+                "direction":   decision["direction"],
+                "confidence":  decision["confidence"],
+                "price":       price,
+                "size_pct":    decision["size_pct"],
+                "executed":    execution.get("executed", False),
+                "exec_action": execution.get("action", ""),
             })
             if len(_history) > 20:
                 _history.pop(0)
@@ -104,9 +106,7 @@ async def agent_loop():
             save_log(_cycle, signals, decision)
             _consecutive_errors = 0
 
-            # Read current persisted position to include in broadcast
-            pos = get_open_position()
-
+            pos   = get_open_position()
             state = {
                 "type":       "update",
                 "cycle":      _cycle,
@@ -122,9 +122,9 @@ async def agent_loop():
                 "uptime":     int((datetime.now() - _start).total_seconds()),
                 "history":    list(_history),
                 "risk_config": {
-                    "cooldown_secs":  EXEC_COOLDOWN,
-                    "max_daily":      MAX_DAILY_TRADES,
-                    "size_pct":       EXEC_MAX_PCT,
+                    "cooldown_secs": EXEC_COOLDOWN,
+                    "max_daily":     MAX_DAILY_TRADES,
+                    "size_pct":      EXEC_MAX_PCT,
                 },
             }
             _latest.update(state)
@@ -132,9 +132,9 @@ async def agent_loop():
 
         except Exception as e:
             _consecutive_errors += 1
-            print(f"[agent error] {e}")
+            print(f"[agent] {e}")
             await _broadcast({"type": "error", "msg": str(e), "cycle": _cycle})
-            # Back off on repeated failures to avoid hammering the API
+            # Back off on repeated failures to avoid hammering the Bitget rate limit
             if _consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                 await asyncio.sleep(LOOP_SECS * 2)
                 continue
@@ -142,18 +142,19 @@ async def agent_loop():
         await asyncio.sleep(LOOP_SECS)
 
 
-# ── CONNECT / DISCONNECT ──────────────────────────────────────────────────────
+# ─── ROUTES ───────────────────────────────────────────────────────────────────
 class ConnectRequest(BaseModel):
     api_key:    str
     secret_key: str
     passphrase: str
     symbol:     str   = "BTCUSDT"
-    budget:     float = 0.0       # manual USDT budget (fallback when API balance unavailable)
+    budget:     float = 0.0
+
 
 @app.post("/api/connect")
 async def connect(req: ConnectRequest):
     if not req.api_key or not req.secret_key or not req.passphrase:
-        return {"ok": False, "error": "All three fields are required."}
+        return {"ok": False, "error": "All three credential fields are required."}
 
     sym = req.symbol.strip().upper()
     set_symbol(sym)
@@ -163,17 +164,13 @@ async def connect(req: ConnectRequest):
 
     balance = get_futures_balance()
     if balance == 0.0:
-        # Validate keys with spot assets endpoint (works on all account modes)
         try:
-            from agent import _auth_get_raw
-            r = _auth_get_raw("/api/v2/spot/account/assets", {"coin": "USDT"})
+            r    = agent._auth_get_raw("/api/v2/spot/account/assets", {"coin": "USDT"})
             code = r.get("code", "")
-            # Auth error codes mean bad credentials; 40404/40085 = valid key, wrong endpoint
-            AUTH_ERRORS = {"40001", "40002", "40003", "40004", "40005", "40031"}
-            if code in AUTH_ERRORS:
+            # Auth error codes indicate bad credentials; 40404/40085 = valid key, wrong endpoint
+            if code in AUTH_ERROR_CODES:
                 set_credentials("", "", "")
-                return {"ok": False, "error": f"Invalid API key or signature: {r.get('msg')}"}
-            # Any other code (including 40404) means the key itself is valid
+                return {"ok": False, "error": f"Invalid API credentials: {r.get('msg')}"}
         except Exception as e:
             set_credentials("", "", "")
             return {"ok": False, "error": f"Could not reach Bitget: {e}"}
@@ -187,8 +184,12 @@ async def connect(req: ConnectRequest):
 async def disconnect():
     global _cycle, _sim_pnl, _last_price, _last_dir, _history, _balance
     set_credentials("", "", "")
-    _cycle = 0; _sim_pnl = 0.0; _last_price = 0.0
-    _last_dir = "FLAT"; _history = []; _balance = 0.0
+    _cycle = 0
+    _sim_pnl = 0.0
+    _last_price = 0.0
+    _last_dir = "FLAT"
+    _history = []
+    _balance = 0.0
     _latest.clear()
     await _broadcast({"type": "disconnected"})
     return {"ok": True}
@@ -197,16 +198,18 @@ async def disconnect():
 class BudgetRequest(BaseModel):
     budget: float = 0.0
 
+
 @app.post("/api/set-budget")
 async def set_budget_route(req: BudgetRequest):
     set_manual_balance(req.budget)
-    bal = agent.get_futures_balance()
+    bal = get_futures_balance()
     await _broadcast({"type": "balance_update", "balance": round(bal, 2)})
     return {"ok": True, "balance": round(bal, 2)}
 
 
 class SwitchRequest(BaseModel):
     symbol: str
+
 
 @app.post("/api/switch-symbol")
 async def switch_symbol_route(req: SwitchRequest):
@@ -215,7 +218,11 @@ async def switch_symbol_route(req: SwitchRequest):
         return {"ok": False, "error": "Not connected"}
     sym = req.symbol.strip().upper()
     set_symbol(sym)
-    _cycle = 0; _sim_pnl = 0.0; _last_price = 0.0; _last_dir = "FLAT"; _history = []
+    _cycle = 0
+    _sim_pnl = 0.0
+    _last_price = 0.0
+    _last_dir = "FLAT"
+    _history = []
     _latest.clear()
     await _broadcast({"type": "symbol_changed", "symbol": sym})
     return {"ok": True, "symbol": sym}
@@ -224,11 +231,11 @@ async def switch_symbol_route(req: SwitchRequest):
 @app.get("/api/status")
 def status():
     return {
-        "cycles":      _cycle,
-        "connected":   len(_clients),
-        "pnl":         _sim_pnl,
-        "balance":     _balance,
-        "creds_set":   credentials_set(),
+        "cycles":    _cycle,
+        "connected": len(_clients),
+        "pnl":       _sim_pnl,
+        "balance":   _balance,
+        "creds_set": credentials_set(),
         "risk_config": {
             "cooldown_secs": EXEC_COOLDOWN,
             "max_daily":     MAX_DAILY_TRADES,
@@ -258,9 +265,8 @@ async def ws_route(ws: WebSocket):
     }))
     try:
         while True:
-            # Keep connection alive; client may send pings
             try:
-                msg = await asyncio.wait_for(ws.receive_text(), timeout=30)
+                await asyncio.wait_for(ws.receive_text(), timeout=30)
             except asyncio.TimeoutError:
                 await ws.send_text(json.dumps({"type": "ping"}))
     except WebSocketDisconnect:
@@ -276,7 +282,6 @@ def root():
 
 
 if __name__ == "__main__":
-    import os as _os
-    port = int(_os.getenv("PORT", 8000))
-    print(f"\nBitAgent server  ->  http://localhost:{port}\n")
+    port = int(os.getenv("PORT", 8000))
+    print(f"\nBitAgent  ->  http://localhost:{port}\n")
     uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False, log_level="warning")
