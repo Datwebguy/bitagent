@@ -25,7 +25,8 @@ AUTH_ERROR_CODES = {"40001", "40002", "40003", "40004", "40005", "40031"}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _agent_task
+    global _agent_task, _wake_loop
+    _wake_loop = asyncio.Event()
     _agent_task = asyncio.create_task(agent_loop())
     yield
     _agent_task.cancel()
@@ -46,6 +47,7 @@ _last_price:        float          = 0.0
 _last_dir:          str            = "FLAT"
 _agent_task                        = None
 _consecutive_errors: int           = 0
+_wake_loop:          asyncio.Event = None
 
 MAX_CONSECUTIVE_ERRORS = 5
 _start = datetime.now()
@@ -163,7 +165,12 @@ async def agent_loop():
                 await asyncio.sleep(LOOP_SECS * 2)
                 continue
 
-        await asyncio.sleep(LOOP_SECS)
+        # Sleep LOOP_SECS, but wake immediately if a symbol switch fires
+        _wake_loop.clear()
+        try:
+            await asyncio.wait_for(_wake_loop.wait(), timeout=LOOP_SECS)
+        except asyncio.TimeoutError:
+            pass
 
 
 # ─── ROUTES ───────────────────────────────────────────────────────────────────
@@ -237,7 +244,7 @@ class SwitchRequest(BaseModel):
 
 @app.post("/api/switch-symbol")
 async def switch_symbol_route(req: SwitchRequest):
-    global _cycle, _sim_pnl, _last_price, _last_dir, _history
+    global _cycle, _sim_pnl, _last_price, _last_dir, _history, _consecutive_errors
     if not credentials_set():
         return {"ok": False, "error": "Not connected"}
     sym = req.symbol.strip().upper()
@@ -247,8 +254,12 @@ async def switch_symbol_route(req: SwitchRequest):
     _last_price = 0.0
     _last_dir = "FLAT"
     _history = []
+    _consecutive_errors = 0
     _latest.clear()
     await _broadcast({"type": "symbol_changed", "symbol": sym})
+    # Interrupt the sleep so the agent loop runs immediately for the new symbol
+    if _wake_loop:
+        _wake_loop.set()
     return {"ok": True, "symbol": sym}
 
 
