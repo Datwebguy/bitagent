@@ -1324,12 +1324,15 @@ function updateSignalCard(k, data) {
 // TICKER TAPE
 // ══════════════════════════════════════════════════════
 function buildTicker(data) {
+  if (data.symbol) _currentSymbol = data.symbol;
+  const base  = _currentSymbol.replace('USDT', '');
+  const pair  = `${base}/USDT`;
   const items = [
-    ['BTC/USDT',   `$${fmt(data.price)}`,   'teal'],
+    [pair,         `$${fmt(data.price)}`,   'teal'],
     ['24h Change', `${data.signals?.momentum?.change_24h_pct ?? '—'}%`,
         (data.signals?.momentum?.change_24h_pct ?? 0) >= 0 ? 'bull' : 'bear'],
     ['Funding',    `${data.signals?.sentiment?.funding_rate ?? '—'}%`, ''],
-    ['Open Int',   `${data.signals?.momentum?.open_interest ?? '—'} BTC`, ''],
+    ['Open Int',   `${data.signals?.momentum?.open_interest ?? '—'} ${base}`, ''],
     ['Cycle',      `#${data.cycle}`, ''],
     ['Sim P&L',    `${data.sim_pnl >= 0 ? '+' : ''}${data.sim_pnl}%`,
         data.sim_pnl >= 0 ? 'bull' : 'bear'],
@@ -1452,7 +1455,8 @@ function updateExecution(exec) {
 // ══════════════════════════════════════════════════════
 // TRADE LOG
 // ══════════════════════════════════════════════════════
-let _knownTs = new Set();
+let _knownTs       = new Set();
+let _currentSymbol = 'BTCUSDT';
 
 function updateLog(history) {
   if (!history || !history.length) return;
@@ -1670,6 +1674,7 @@ function connect() {
       }
       // Always pre-set symbol if known
       if (data.latest?.symbol) {
+        _currentSymbol = data.latest.symbol;
         setSymbolDisplay(data.latest.symbol);
         rebuildSymbolDrop(data.latest.symbol);
       }
@@ -1678,7 +1683,11 @@ function connect() {
 
     if (data.type === 'connected') {
       hideConnectScreen();
-      if (data.symbol)   { setSymbolDisplay(data.symbol); rebuildSymbolDrop(data.symbol); }
+      if (data.symbol) {
+        _currentSymbol = data.symbol;
+        setSymbolDisplay(data.symbol);
+        rebuildSymbolDrop(data.symbol);
+      }
       if (data.balance != null) updateBalance(data.balance);
       if ('position' in data)   updatePosition(data.position);
       return;
@@ -1688,6 +1697,7 @@ function connect() {
       return;
     }
     if (data.type === 'symbol_changed') {
+      _currentSymbol = data.symbol;
       setSymbolDisplay(data.symbol);
       rebuildSymbolDrop(data.symbol);
       // Clear stale data while agent catches up
@@ -1697,6 +1707,8 @@ function connect() {
       _knownTs.clear();
       document.getElementById('logList').innerHTML =
         `<div class="log-empty"><span>Switched to ${data.symbol.replace('USDT','/USDT')}</span><span style="color:var(--txt3)">Next cycle in ~60s</span></div>`;
+      // Refresh ticker label immediately so it shows new symbol
+      buildTicker({ symbol: data.symbol, price: 0, cycle: 0, sim_pnl: 0, signals: {}, decision: {} });
       return;
     }
 
