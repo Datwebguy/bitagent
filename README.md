@@ -2,7 +2,7 @@
 
 > Built for the **Bitget AI Base Camp Hackathon S1** (May 27 – June 25, 2026)
 
-BitAgent is a production-grade autonomous trading system that perceives live market conditions across five signal dimensions, reasons over them with an LLM, and executes real perpetual futures orders on Bitget — all with a professional real-time cockpit UI.
+BitAgent is a production-grade autonomous trading system that perceives live market conditions across six signal dimensions, reasons over them with an LLM, and executes real perpetual futures orders on Bitget — all with a professional real-time cockpit UI.
 
 ---
 
@@ -15,7 +15,7 @@ Browser (WebSocket) ──► FastAPI Server ──► Bitget REST API
                               │
               ┌───────────────┼───────────────┐
           Signals          Reason           Execute
-        (5 sources)      (Qwen LLM)    (v2 / v3 API)
+        (6 sources)      (Qwen LLM)    (v2 / v3 API)
 ```
 
 **Stack:** Python 3.11 · FastAPI · WebSocket · NumPy · SQLite · Single-file HTML frontend
@@ -26,20 +26,21 @@ Browser (WebSocket) ──► FastAPI Server ──► Bitget REST API
 
 | Signal | Source | What it measures |
 |--------|--------|-----------------|
-| **Technical** | 15m candles | RSI(14), SMA20 trend, EMA12/26 MACD direction |
-| **Sentiment** | Funding rate | Crowd positioning — high funding = longs overextended |
+| **Technical** | 15m candles | RSI(14), Bollinger Bands %B, Stochastic RSI, MACD direction |
+| **Sentiment** | Bitget + alternative.me | Funding rate, Fear & Greed index, Long/Short ratio |
+| **Macro** | CoinGecko global | BTC dominance, total market cap 24h change |
 | **Momentum** | 24h ticker + OI | Price change, range position, open interest |
 | **Market Depth** | Order book top 10 | Bid/ask volume imbalance |
 | **Volatility** | 1H candles | ATR(14) regime — expanding vs. contracting |
 
-Three or more signals in agreement triggers a directional trade. Conflicts produce FLAT.
+Priority order: Technical → Sentiment → Macro → Momentum → Depth → Volatility. Four or more signals in strong agreement triggers a high-confidence trade; three signals give 60% confidence.
 
 ---
 
 ## Decision Engine
 
 Without a Qwen API key, the agent runs a transparent rule-based majority vote.  
-With `QWEN_API_KEY` set, decisions are handed to `qwen3.6-plus` via the Bitget hackathon endpoint — the model receives all five signal payloads and returns a structured JSON decision including entry, stop-loss, take-profit, confidence, and reasoning.
+With `QWEN_API_KEY` set, decisions are handed to `qwen3.6-plus` via the Bitget hackathon endpoint — the model receives all six signal payloads and returns a structured JSON decision including entry, stop-loss, take-profit, confidence, and reasoning.
 
 **Minimum confidence to trade:** 60%  
 **Max trade size:** 1% of balance per cycle (configurable)  

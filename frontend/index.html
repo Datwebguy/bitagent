@@ -161,8 +161,8 @@ header{
 
 /* ── SIGNALS ROW ─────────────────────────────────────── */
 .signals-row{
-  display:grid;grid-template-columns:repeat(5,1fr);
-  gap:12px;padding:12px 24px;
+  display:grid;grid-template-columns:repeat(6,1fr);
+  gap:10px;padding:10px 24px;
   border-bottom:1px solid var(--border);
 }
 .sig-card{
@@ -1219,8 +1219,9 @@ drawBg();
 // SIGNAL CARDS  (initial render)
 // ══════════════════════════════════════════════════════
 const SIG_META = {
-  technical:  { label:'Technical',  icon:'◈', keys:['rsi','trend','macd'] },
-  sentiment:  { label:'Sentiment',  icon:'◉', keys:['funding_rate','note'] },
+  technical:  { label:'Technical',  icon:'◈', keys:['rsi','stoch_rsi','trend'] },
+  sentiment:  { label:'Sentiment',  icon:'◉', keys:['fear_greed','long_short_ratio','funding_rate'] },
+  macro:      { label:'Macro',      icon:'◐', keys:['btc_dominance','mcap_change_24h'] },
   momentum:   { label:'Momentum',   icon:'◆', keys:['change_24h_pct','range_position'] },
   depth:      { label:'Mkt Depth',  icon:'◇', keys:['imbalance','spread_pct'] },
   volatility: { label:'Volatility', icon:'◎', keys:['regime','atr_pct'] },
@@ -1247,13 +1248,16 @@ function buildSignalCards() {
 buildSignalCards();
 
 function fmtMetricVal(k, v) {
-  if (k === 'funding_rate') return v + '%';
-  if (k === 'change_24h_pct') return v + '%';
-  if (k === 'range_position') return v + '%';
-  if (k === 'atr_pct') return v + '%';
-  if (k === 'spread_pct') return v + '%';
-  if (typeof v === 'number') return String(v);
-  return String(v).slice(0,14);
+  if (k === 'funding_rate')    return v + '%';
+  if (k === 'change_24h_pct')  return v + '%';
+  if (k === 'range_position')  return v + '%';
+  if (k === 'atr_pct')         return v + '%';
+  if (k === 'spread_pct')      return v + '%';
+  if (k === 'btc_dominance')   return v + '%';
+  if (k === 'mcap_change_24h') return (v >= 0 ? '+' : '') + v + '%';
+  if (k === 'long_short_ratio') return String(v);
+  if (typeof v === 'number')   return String(v);
+  return String(v).slice(0, 14);
 }
 
 function signalStrength(type, sig, data) {
@@ -1277,8 +1281,11 @@ function signalStrength(type, sig, data) {
       raw = Math.min(Math.abs(data.imbalance || 0) / 0.5 * 100, 100);
       break;
     case 'volatility':
-      // ATR % of price (1% = normal, 2% = elevated)
       raw = Math.min((data.atr_pct || 0) / 2 * 100, 100);
+      break;
+    case 'macro':
+      // market cap move magnitude (2% = strong, 5% = extreme)
+      raw = Math.min(Math.abs(data.mcap_change_24h || 0) / 5 * 100, 100);
       break;
   }
   return Math.max(15, Math.min(95, raw));

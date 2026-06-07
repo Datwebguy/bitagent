@@ -13,7 +13,7 @@ from pydantic import BaseModel
 import agent
 from agent import (
     get_technical_signal, get_sentiment_signal, get_momentum_signal,
-    get_depth_signal, get_volatility_signal, reason_with_qwen,
+    get_depth_signal, get_volatility_signal, get_macro_signal, reason_with_qwen,
     apply_risk_rules, execute_trade, save_log,
     set_credentials, credentials_set, set_symbol, set_manual_balance,
     get_futures_balance, get_open_position, get_trade_history,
@@ -74,6 +74,7 @@ async def agent_loop():
             signals  = {
                 "technical":  get_technical_signal(),
                 "sentiment":  get_sentiment_signal(),
+                "macro":      get_macro_signal(),
                 "momentum":   get_momentum_signal(),
                 "depth":      get_depth_signal(),
                 "volatility": get_volatility_signal(),

@@ -531,7 +531,8 @@ def get_technical_signal() -> dict:
                           "granularity": "15m", "limit": 60})
     candles = raw if isinstance(raw, list) else raw.get("candles", [])
     if len(candles) < 26:
-        return {"signal": "NEUTRAL", "rsi": 50, "trend": "FLAT", "macd": "FLAT", "price": 0.0}
+        return {"signal": "NEUTRAL", "rsi": 50, "stoch_rsi": 50,
+                "trend": "FLAT", "macd": "FLAT", "bb_pct": 0.5, "price": 0.0}
 
     closes = np.array([float(c[4]) for c in candles])
     deltas = np.diff(closes)
@@ -539,37 +540,89 @@ def get_technical_signal() -> dict:
     losses = np.where(deltas < 0, -deltas, 0.0)
     rsi    = round(100 - 100 / (1 + np.mean(gains[-14:]) / (np.mean(losses[-14:]) + 1e-9)), 1)
 
-    price    = closes[-1]
-    sma20    = np.mean(closes[-20:])
+    price = closes[-1]
+    sma20 = np.mean(closes[-20:])
+    std20 = np.std(closes[-20:])
+    bb_upper = float(sma20 + 2 * std20)
+    bb_lower = float(sma20 - 2 * std20)
+    bb_pct   = (price - bb_lower) / (bb_upper - bb_lower + 1e-9)
+
     trend    = "UP" if price > sma20 * 1.002 else "DOWN" if price < sma20 * 0.998 else "FLAT"
     macd_dir = "POSITIVE" if np.mean(closes[-12:]) > np.mean(closes[-26:]) else "NEGATIVE"
 
-    if   rsi < 38 and trend != "DOWN":              signal = "BULLISH"
-    elif rsi > 68 and trend != "UP":                signal = "BEARISH"
-    elif trend == "UP"   and macd_dir == "POSITIVE": signal = "BULLISH"
-    elif trend == "DOWN" and macd_dir == "NEGATIVE": signal = "BEARISH"
-    else:                                            signal = "NEUTRAL"
+    # Stochastic RSI (14-period)
+    rsi_series = []
+    for i in range(14, len(closes)):
+        d = np.diff(closes[i - 14:i + 1])
+        g = np.where(d > 0, d, 0.0)
+        l = np.where(d < 0, -d, 0.0)
+        rsi_series.append(100 - 100 / (1 + np.mean(g) / (np.mean(l) + 1e-9)))
+    stoch_rsi = 50.0
+    if len(rsi_series) >= 14:
+        window   = rsi_series[-14:]
+        lo, hi   = min(window), max(window)
+        stoch_rsi = round((rsi_series[-1] - lo) / (hi - lo + 1e-9) * 100, 1)
+
+    if   rsi < 35 and bb_pct < 0.2 and trend != "DOWN":  signal = "BULLISH"
+    elif rsi > 65 and bb_pct > 0.8 and trend != "UP":    signal = "BEARISH"
+    elif trend == "UP"   and macd_dir == "POSITIVE":      signal = "BULLISH"
+    elif trend == "DOWN" and macd_dir == "NEGATIVE":      signal = "BEARISH"
+    else:                                                  signal = "NEUTRAL"
 
     return {
-        "signal": signal, "rsi": rsi, "trend": trend, "macd": macd_dir,
+        "signal": signal, "rsi": rsi, "stoch_rsi": stoch_rsi,
+        "trend": trend, "macd": macd_dir,
         "price": round(price, 2), "sma20": round(float(sma20), 2),
+        "bb_pct": round(bb_pct, 3),
+        "bb_upper": round(bb_upper, 2), "bb_lower": round(bb_lower, 2),
     }
 
 
 def get_sentiment_signal() -> dict:
     fr_data = public_get("/api/v2/mix/market/current-fund-rate",
                          {"symbol": SYMBOL, "productType": PRODUCT})
-    rate    = float(fr_data[0]["fundingRate"]) if isinstance(fr_data, list) else 0.0
+    rate = float(fr_data[0]["fundingRate"]) if isinstance(fr_data, list) else 0.0
+
+    # Long/short ratio from Bitget
+    ls_ratio = 1.0
+    try:
+        ls_raw = public_get("/api/v2/mix/market/long-short-ratio",
+                            {"symbol": SYMBOL, "productType": PRODUCT, "period": "1h"})
+        if isinstance(ls_raw, list) and ls_raw:
+            ls_ratio = float(ls_raw[-1].get("longShortRatio", 1.0))
+    except Exception:
+        pass
+
+    # Fear & Greed index (alternative.me — free, no auth required)
+    fear_greed, fg_label = 50, "Neutral"
+    try:
+        fg = requests.get("https://api.alternative.me/fng/?limit=1", timeout=8).json()
+        fear_greed = int(fg["data"][0]["value"])
+        fg_label   = fg["data"][0]["value_classification"]
+    except Exception:
+        pass
 
     # Positive funding = longs pay shorts = crowd overweight long = contrarian bearish
-    if rate > 0.0003:
-        signal, note = "BEARISH", "High funding: longs overextended"
-    elif rate < -0.0001:
-        signal, note = "BULLISH", "Negative funding: shorts overextended"
-    else:
-        signal, note = "NEUTRAL", "Funding near zero: balanced positioning"
+    f_sig  = "BEARISH" if rate > 0.0003 else "BULLISH" if rate < -0.0001 else "NEUTRAL"
+    # >1.2 longs crowded (bearish), <0.8 shorts crowded (bullish)
+    ls_sig = "BEARISH" if ls_ratio > 1.2 else "BULLISH" if ls_ratio < 0.8 else "NEUTRAL"
+    # Extreme fear = contrarian bullish, extreme greed = contrarian bearish
+    fg_sig = "BULLISH" if fear_greed < 30 else "BEARISH" if fear_greed > 70 else "NEUTRAL"
 
-    return {"signal": signal, "funding_rate": round(rate * 100, 5), "note": note}
+    votes  = [f_sig, f_sig, ls_sig, fg_sig]  # funding weighted double
+    bulls  = votes.count("BULLISH")
+    bears  = votes.count("BEARISH")
+    signal = "BULLISH" if bulls > bears else "BEARISH" if bears > bulls else "NEUTRAL"
+    note   = f"F&G {fear_greed} ({fg_label}) | L/S {ls_ratio:.2f} | Funding {rate*100:+.4f}%"
+
+    return {
+        "signal":           signal,
+        "funding_rate":     round(rate * 100, 5),
+        "long_short_ratio": round(ls_ratio, 3),
+        "fear_greed":       fear_greed,
+        "fear_greed_label": fg_label,
+        "note":             note,
+    }
 
 
 def get_momentum_signal() -> dict:
@@ -650,12 +703,47 @@ def get_volatility_signal() -> dict:
     return {"signal": signal, "regime": regime, "atr_pct": round(atr_pct, 3)}
 
 
+def get_macro_signal() -> dict:
+    btc_dom    = 50.0
+    mcap_change = 0.0
+    try:
+        data        = requests.get(
+            "https://api.coingecko.com/api/v3/global",
+            timeout=8, headers={"accept": "application/json"},
+        ).json().get("data", {})
+        btc_dom     = round(data.get("market_cap_percentage", {}).get("btc", 50.0), 1)
+        mcap_change = round(data.get("market_cap_change_percentage_24h_usd", 0.0), 2)
+    except Exception:
+        pass
+
+    if mcap_change > 2.0:
+        signal = "BULLISH"
+        note   = f"Total market cap +{mcap_change}% — broad risk-on"
+    elif mcap_change < -2.0:
+        signal = "BEARISH"
+        note   = f"Total market cap {mcap_change}% — broad risk-off"
+    elif btc_dom > 60 and mcap_change > 0.5:
+        signal = "BULLISH"
+        note   = f"BTC dominance {btc_dom}% + rising market — institutional accumulation"
+    else:
+        signal = "NEUTRAL"
+        note   = f"BTC dom {btc_dom}% | market {mcap_change:+.1f}%"
+
+    return {
+        "signal":       signal,
+        "btc_dominance": btc_dom,
+        "mcap_change_24h": mcap_change,
+        "note":         note,
+    }
+
+
 # ─── REASONING ────────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = (
     "You are BitAgent, an autonomous crypto trading analyst. "
-    "You receive 5 market signals for a perpetual futures pair and output a structured trade decision. "
-    "Signal priority: Technical > Sentiment > Momentum > Depth > Volatility. "
-    "When 3+ signals agree, confidence is high. When signals conflict, reduce size and confidence. "
+    "You receive 6 market signals for a perpetual futures pair and output a structured trade decision. "
+    "Signal priority: Technical > Sentiment > Macro > Momentum > Depth > Volatility. "
+    "Sentiment includes Fear & Greed index and long/short ratio in addition to funding rate. "
+    "When 4+ signals agree, confidence is high. When signals conflict, reduce size and confidence. "
     "Always output FLAT if confidence is below 60."
 )
 
@@ -670,14 +758,15 @@ def reason_with_qwen(signals: dict) -> dict:
         f"Current {SYMBOL} signals:\n\n"
         f"TECHNICAL:  {json.dumps(signals['technical'])}\n"
         f"SENTIMENT:  {json.dumps(signals['sentiment'])}\n"
+        f"MACRO:      {json.dumps(signals['macro'])}\n"
         f"MOMENTUM:   {json.dumps(signals['momentum'])}\n"
         f"DEPTH:      {json.dumps(signals['depth'])}\n"
         f"VOLATILITY: {json.dumps(signals['volatility'])}\n\n"
         'Respond ONLY with valid JSON (no markdown):\n'
         '{"direction":"LONG"|"SHORT"|"FLAT","confidence":<0-100>,"size_pct":<1.0-3.0>,'
         '"entry_price":<float>,"stop_loss":<float>,"take_profit":<float>,'
-        '"signal_votes":{"technical":"...","sentiment":"...","momentum":"...",'
-        '"depth":"...","volatility":"..."},'
+        '"signal_votes":{"technical":"...","sentiment":"...","macro":"...",'
+        '"momentum":"...","depth":"...","volatility":"..."},'
         '"reasoning":"<2 sentences>","risk_note":"<1 sentence>"}'
     )
     resp = client.chat.completions.create(
@@ -697,13 +786,15 @@ def reason_with_qwen(signals: dict) -> dict:
 
 def _rule_based_decision(signals: dict) -> dict:
     votes = [signals[k]["signal"]
-             for k in ("technical", "sentiment", "momentum", "depth", "volatility")]
+             for k in ("technical", "sentiment", "macro", "momentum", "depth", "volatility")]
     bulls = votes.count("BULLISH")
     bears = votes.count("BEARISH")
     price = signals["technical"]["price"]
 
-    if   bulls >= 3: direction, confidence = "LONG",  min(55 + bulls * 5, 85)
-    elif bears >= 3: direction, confidence = "SHORT", min(55 + bears * 5, 85)
+    if   bulls >= 4: direction, confidence = "LONG",  min(55 + bulls * 5, 85)
+    elif bears >= 4: direction, confidence = "SHORT", min(55 + bears * 5, 85)
+    elif bulls >= 3: direction, confidence = "LONG",  60
+    elif bears >= 3: direction, confidence = "SHORT", 60
     else:            direction, confidence = "FLAT",  40
 
     dist = price * 0.015
