@@ -96,7 +96,9 @@ def _auth_headers(method: str, path: str, body: str = "") -> dict:
 def public_get(path: str, params: dict = None) -> dict:
     r = requests.get(BITGET_BASE + path, params=params or {}, timeout=15)
     r.raise_for_status()
-    return r.json().get("data", {})
+    # Use "or {}" — .get("data", {}) only falls back when key is absent,
+    # but Bitget sometimes sends "data": null (key present, value null).
+    return r.json().get("data") or {}
 
 
 def _auth_get_raw(path: str, params: dict = None) -> dict:
@@ -526,13 +528,17 @@ def execute_trade(decision: dict, signals: dict) -> dict:
 
 # ─── SIGNALS ──────────────────────────────────────────────────────────────────
 def get_technical_signal() -> dict:
-    raw     = public_get("/api/v2/mix/market/candles",
+    _neutral = {"signal": "NEUTRAL", "rsi": 50, "stoch_rsi": 50,
+                "trend": "FLAT", "macd": "FLAT", "bb_pct": 0.5, "price": 0.0}
+    try:
+        raw = public_get("/api/v2/mix/market/candles",
                          {"symbol": SYMBOL, "productType": PRODUCT,
                           "granularity": "15m", "limit": 60})
-    candles = raw if isinstance(raw, list) else raw.get("candles", [])
+    except Exception:
+        return _neutral
+    candles = raw if isinstance(raw, list) else (raw.get("candles") or [] if isinstance(raw, dict) else [])
     if len(candles) < 26:
-        return {"signal": "NEUTRAL", "rsi": 50, "stoch_rsi": 50,
-                "trend": "FLAT", "macd": "FLAT", "bb_pct": 0.5, "price": 0.0}
+        return _neutral
 
     closes = np.array([float(c[4]) for c in candles])
     deltas = np.diff(closes)
@@ -579,9 +585,16 @@ def get_technical_signal() -> dict:
 
 
 def get_sentiment_signal() -> dict:
-    fr_data = public_get("/api/v2/mix/market/current-fund-rate",
-                         {"symbol": SYMBOL, "productType": PRODUCT})
-    rate = float(fr_data[0]["fundingRate"]) if isinstance(fr_data, list) else 0.0
+    rate = 0.0
+    try:
+        fr_data = public_get("/api/v2/mix/market/current-fund-rate",
+                             {"symbol": SYMBOL, "productType": PRODUCT})
+        if isinstance(fr_data, list) and fr_data:
+            rate = float(fr_data[0].get("fundingRate", 0) or 0)
+        elif isinstance(fr_data, dict):
+            rate = float(fr_data.get("fundingRate", 0) or 0)
+    except Exception:
+        pass
 
     # Long/short ratio from Bitget
     ls_ratio = 1.0
@@ -626,18 +639,30 @@ def get_sentiment_signal() -> dict:
 
 
 def get_momentum_signal() -> dict:
-    t      = public_get("/api/v2/mix/market/ticker",
-                        {"symbol": SYMBOL, "productType": PRODUCT})
-    ticker = t[0] if isinstance(t, list) else t
-    oi_raw = public_get("/api/v2/mix/market/open-interest",
-                        {"symbol": SYMBOL, "productType": PRODUCT})
-    oi     = float(oi_raw.get("openInterestList", [{}])[0].get("size", 0))
+    try:
+        t = public_get("/api/v2/mix/market/ticker",
+                       {"symbol": SYMBOL, "productType": PRODUCT})
+    except Exception:
+        t = {}
+    ticker = t[0] if isinstance(t, list) else (t if isinstance(t, dict) else {})
 
-    price  = float(ticker.get("lastPr", 0))
-    high   = float(ticker.get("high24h", 0))
-    low    = float(ticker.get("low24h", 0))
-    change = float(ticker.get("change24h", 0)) * 100
-    vol    = float(ticker.get("usdtVolume", 0))
+    oi = 0.0
+    try:
+        oi_raw = public_get("/api/v2/mix/market/open-interest",
+                            {"symbol": SYMBOL, "productType": PRODUCT})
+        if isinstance(oi_raw, list) and oi_raw:
+            oi = float(oi_raw[0].get("size", 0) or 0)
+        elif isinstance(oi_raw, dict):
+            oi_list = oi_raw.get("openInterestList") or []
+            oi = float(oi_list[0].get("size", 0)) if oi_list else float(oi_raw.get("size", 0) or 0)
+    except Exception:
+        pass
+
+    price  = float(ticker.get("lastPr",  0) or 0)
+    high   = float(ticker.get("high24h", 0) or 0)
+    low    = float(ticker.get("low24h",  0) or 0)
+    change = float(ticker.get("change24h", 0) or 0) * 100
+    vol    = float(ticker.get("usdtVolume", 0) or 0)
     range_pct = (price - low) / (high - low + 1e-9) * 100 if high != low else 50.0
 
     if   change > 1.5  and range_pct > 60: signal = "BULLISH"
@@ -652,10 +677,13 @@ def get_momentum_signal() -> dict:
 
 
 def get_depth_signal() -> dict:
-    raw  = public_get("/api/v2/mix/market/merge-depth",
-                      {"symbol": SYMBOL, "productType": PRODUCT, "limit": "20"})
-    bids = raw.get("bids", [])
-    asks = raw.get("asks", [])
+    try:
+        raw = public_get("/api/v2/mix/market/merge-depth",
+                         {"symbol": SYMBOL, "productType": PRODUCT, "limit": "20"})
+    except Exception:
+        raw = {}
+    bids = raw.get("bids", []) if isinstance(raw, dict) else []
+    asks = raw.get("asks", []) if isinstance(raw, dict) else []
 
     if not bids or not asks:
         return {"signal": "NEUTRAL", "imbalance": 0.0, "spread_pct": 0.0}

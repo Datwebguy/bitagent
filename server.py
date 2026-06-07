@@ -71,13 +71,36 @@ async def agent_loop():
 
         _cycle += 1
         try:
-            signals  = {
-                "technical":  get_technical_signal(),
-                "sentiment":  get_sentiment_signal(),
-                "macro":      get_macro_signal(),
-                "momentum":   get_momentum_signal(),
-                "depth":      get_depth_signal(),
-                "volatility": get_volatility_signal(),
+            # Snapshot symbol at cycle start — prevents race condition where a
+            # mid-cycle switch would tag BTC signals with the new SOL symbol.
+            sym = agent.SYMBOL
+
+            _NEUTRAL_DEFAULTS = {
+                "technical":  {"signal": "NEUTRAL", "rsi": 50, "stoch_rsi": 50,
+                               "trend": "FLAT", "macd": "FLAT", "bb_pct": 0.5, "price": 0.0},
+                "sentiment":  {"signal": "NEUTRAL", "funding_rate": 0, "long_short_ratio": 1,
+                               "fear_greed": 50, "fear_greed_label": "Neutral", "note": ""},
+                "macro":      {"signal": "NEUTRAL", "btc_dominance": 50, "mcap_change_24h": 0, "note": ""},
+                "momentum":   {"signal": "NEUTRAL", "change_24h_pct": 0, "volume_24h_usd": 0,
+                               "range_position": 50, "open_interest": 0},
+                "depth":      {"signal": "NEUTRAL", "imbalance": 0.0, "spread_pct": 0.0},
+                "volatility": {"signal": "NEUTRAL", "regime": "UNKNOWN", "atr_pct": 0.0},
+            }
+
+            def _safe(key, fn):
+                try:
+                    return fn()
+                except Exception as e:
+                    print(f"[signal:{key}] {e}")
+                    return _NEUTRAL_DEFAULTS[key]
+
+            signals = {
+                "technical":  _safe("technical",  get_technical_signal),
+                "sentiment":  _safe("sentiment",  get_sentiment_signal),
+                "macro":      _safe("macro",       get_macro_signal),
+                "momentum":   _safe("momentum",   get_momentum_signal),
+                "depth":      _safe("depth",       get_depth_signal),
+                "volatility": _safe("volatility", get_volatility_signal),
             }
             decision  = apply_risk_rules(reason_with_qwen(signals))
             execution = execute_trade(decision, signals)
@@ -112,7 +135,7 @@ async def agent_loop():
                 "type":       "update",
                 "cycle":      _cycle,
                 "ts":         datetime.now(timezone.utc).isoformat(),
-                "symbol":     agent.SYMBOL,
+                "symbol":     sym,
                 "signals":    signals,
                 "decision":   decision,
                 "execution":  execution,
