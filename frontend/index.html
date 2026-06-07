@@ -1375,8 +1375,11 @@ function updateDecision(d) {
   const arc    = document.getElementById('gaugeArc');
   const gPct   = document.getElementById('gaugePct');
   arc.style.strokeDashoffset = offset;
-  arc.style.stroke = pct >= 70 ? '#0ECB81' : pct >= 50 ? '#F0B90B' : '#F6465D';
-  gPct.textContent  = pct + '%';
+  arc.style.stroke = pct === 0 ? '#2a2d3e'
+                   : pct >= 70 ? '#0ECB81'
+                   : pct >= 50 ? '#F0B90B'
+                   : '#F6465D';
+  gPct.textContent = pct === 0 ? '—' : pct + '%';
 
   // Params — only show SL/TP/Entry when there is an active directional signal
   if (dir === 'FLAT') {
@@ -1700,14 +1703,39 @@ function connect() {
       _currentSymbol = data.symbol;
       setSymbolDisplay(data.symbol);
       rebuildSymbolDrop(data.symbol);
-      // Clear stale data while agent catches up
+
+      // ── Header stats ──────────────────────────────────────────────────
       document.getElementById('hdrPrice').textContent = '$—';
       document.getElementById('hdrCycle').textContent = '#0';
       document.getElementById('lastTs').textContent   = 'Switching...';
+
+      // ── Signal cards — rebuild to scanning / neutral state ─────────────
+      const sigRow = document.getElementById('signalsRow');
+      sigRow.innerHTML = '';
+      buildSignalCards();
+
+      // ── Decision panel ─────────────────────────────────────────────────
+      updateDecision({
+        direction: 'FLAT', confidence: 0, size_pct: 0,
+        entry_price: 0, stop_loss: 0, take_profit: 0,
+        reasoning: `Switched to ${data.symbol.replace('USDT', '/USDT')} — waiting for first cycle...`,
+        risk_note: '',
+      });
+
+      // ── Execution bar ──────────────────────────────────────────────────
+      document.getElementById('execAction').textContent    = 'IDLE';
+      document.getElementById('execAction').className      = 'exec-bar-action off';
+      document.getElementById('execDot').className         = 'exec-bar-dot off';
+      document.getElementById('execDetailNormal').textContent = 'Waiting for first agent cycle...';
+      document.getElementById('execBadge').textContent     = '—';
+      document.getElementById('cooldownWrap').style.display = 'none';
+
+      // ── Agent log ──────────────────────────────────────────────────────
       _knownTs.clear();
       document.getElementById('logList').innerHTML =
         `<div class="log-empty"><span>Switched to ${data.symbol.replace('USDT','/USDT')}</span><span style="color:var(--txt3)">Next cycle in ~60s</span></div>`;
-      // Refresh ticker label immediately so it shows new symbol
+
+      // ── Ticker — show new symbol with empty values ─────────────────────
       buildTicker({ symbol: data.symbol, price: 0, cycle: 0, sim_pnl: 0, signals: {}, decision: {} });
       return;
     }
