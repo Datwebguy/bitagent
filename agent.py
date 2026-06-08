@@ -36,8 +36,20 @@ EXEC_COOLDOWN    = int(os.getenv("EXEC_COOLDOWN", "300"))
 MAX_DAILY_TRADES = int(os.getenv("MAX_DAILY_TRADES", "10"))
 
 MIN_LOT_SIZES = {
-    "BTC": 0.001, "ETH": 0.01,  "SOL": 0.1,  "BNB": 0.01,
-    "XRP": 1.0,   "DOGE": 10.0, "ADA": 10.0, "AVAX": 0.1,
+    # Major — high price, need more balance
+    "BTC":   0.0001, "ETH":  0.01,  "SOL":  0.1,   "BNB":  0.01,
+    "LTC":   0.1,    "LINK": 1.0,   "AAVE": 0.1,
+    # Mid-range
+    "XRP":   1.0,    "ADA":  1.0,   "AVAX": 0.1,   "DOT":  1.0,
+    "ATOM":  1.0,    "NEAR": 1.0,   "UNI":  1.0,   "INJ":  0.1,
+    "APT":   0.001,  "SUI":  0.1,   "TIA":  0.1,   "JUP":  1.0,
+    "WLD":   1.0,    "CRV":  1.0,   "OP":   0.1,   "ARB":  0.01,
+    # Low-cost — tradeable with $0.50+
+    "TRX":   1.0,    "DOGE": 1.0,   "SHIB": 10000.0, "PEPE": 1000.0,
+    "WIF":   0.1,    "SEI":  1.0,   "SAND": 1.0,   "MANA": 1.0,
+    "GALA":  1.0,    "CHZ":  20.0,  "ENJ":  3.0,   "NOT":  10.0,
+    "FLOKI": 1.0,    "TURBO": 1.0,  "PYTH": 1.0,   "POPCAT": 1.0,
+    "PNUT":  1.0,    "MOODENG": 1.0,
 }
 
 

@@ -968,14 +968,48 @@ footer .sep{color:var(--border2)}
       <div class="connect-field">
         <label class="connect-label">Trading Pair</label>
         <select class="connect-input" id="inputSymbol" style="cursor:pointer">
-          <option value="BTCUSDT">BTC / USDT Perpetual</option>
-          <option value="ETHUSDT">ETH / USDT Perpetual</option>
-          <option value="SOLUSDT">SOL / USDT Perpetual</option>
-          <option value="BNBUSDT">BNB / USDT Perpetual</option>
-          <option value="XRPUSDT">XRP / USDT Perpetual</option>
-          <option value="DOGEUSDT">DOGE / USDT Perpetual</option>
-          <option value="ADAUSDT">ADA / USDT Perpetual</option>
-          <option value="AVAXUSDT">AVAX / USDT Perpetual</option>
+          <optgroup label="── Major">
+            <option value="BTCUSDT">BTC / USDT Perpetual</option>
+            <option value="ETHUSDT">ETH / USDT Perpetual</option>
+            <option value="SOLUSDT">SOL / USDT Perpetual</option>
+            <option value="BNBUSDT">BNB / USDT Perpetual</option>
+            <option value="LTCUSDT">LTC / USDT Perpetual</option>
+            <option value="LINKUSDT">LINK / USDT Perpetual</option>
+          </optgroup>
+          <optgroup label="── Large Cap Alts">
+            <option value="XRPUSDT">XRP / USDT Perpetual</option>
+            <option value="ADAUSDT">ADA / USDT Perpetual</option>
+            <option value="AVAXUSDT">AVAX / USDT Perpetual</option>
+            <option value="DOTUSDT">DOT / USDT Perpetual</option>
+            <option value="ATOMUSDT">ATOM / USDT Perpetual</option>
+            <option value="NEARUSDT">NEAR / USDT Perpetual</option>
+            <option value="UNIUSDT">UNI / USDT Perpetual</option>
+          </optgroup>
+          <optgroup label="── Layer 2 / DeFi">
+            <option value="INJUSDT">INJ / USDT Perpetual</option>
+            <option value="OPUSDT">OP / USDT Perpetual</option>
+            <option value="ARBUSDT">ARB / USDT Perpetual</option>
+            <option value="SUIUSDT">SUI / USDT Perpetual</option>
+            <option value="APTUSDT">APT / USDT Perpetual</option>
+            <option value="TIAUSDT">TIA / USDT Perpetual</option>
+            <option value="JUPUSDT">JUP / USDT Perpetual</option>
+            <option value="WLDUSDT">WLD / USDT Perpetual</option>
+            <option value="CRVUSDT">CRV / USDT Perpetual</option>
+          </optgroup>
+          <optgroup label="── Low-Cost (trade from $0.50)">
+            <option value="DOGEUSDT">DOGE / USDT Perpetual</option>
+            <option value="TRXUSDT">TRX / USDT Perpetual</option>
+            <option value="SEIUSDT">SEI / USDT Perpetual</option>
+            <option value="SHIBUSDT">SHIB / USDT Perpetual</option>
+            <option value="PEPEUSDT">PEPE / USDT Perpetual</option>
+            <option value="WIFUSDT">WIF / USDT Perpetual</option>
+            <option value="SANDUSDT">SAND / USDT Perpetual</option>
+            <option value="MANAUSDT">MANA / USDT Perpetual</option>
+            <option value="GALAUSDT">GALA / USDT Perpetual</option>
+            <option value="NOTUSDT">NOT / USDT Perpetual</option>
+            <option value="PNUTUSDT">PNUT / USDT Perpetual</option>
+            <option value="POPCATUSDT">POPCAT / USDT Perpetual</option>
+          </optgroup>
         </select>
       </div>
       <div class="connect-field">
@@ -1628,10 +1662,36 @@ function rebuildSymbolDrop(activeSym) {
     ['ETHUSDT','ETH / USDT Perp'],
     ['SOLUSDT','SOL / USDT Perp'],
     ['BNBUSDT','BNB / USDT Perp'],
+    ['LTCUSDT','LTC / USDT Perp'],
+    ['LINKUSDT','LINK / USDT Perp'],
     ['XRPUSDT','XRP / USDT Perp'],
-    ['DOGEUSDT','DOGE / USDT Perp'],
     ['ADAUSDT','ADA / USDT Perp'],
     ['AVAXUSDT','AVAX / USDT Perp'],
+    ['DOTUSDT','DOT / USDT Perp'],
+    ['ATOMUSDT','ATOM / USDT Perp'],
+    ['NEARUSDT','NEAR / USDT Perp'],
+    ['UNIUSDT','UNI / USDT Perp'],
+    ['INJUSDT','INJ / USDT Perp'],
+    ['OPUSDT','OP / USDT Perp'],
+    ['ARBUSDT','ARB / USDT Perp'],
+    ['SUIUSDT','SUI / USDT Perp'],
+    ['APTUSDT','APT / USDT Perp'],
+    ['TIAUSDT','TIA / USDT Perp'],
+    ['JUPUSDT','JUP / USDT Perp'],
+    ['WLDUSDT','WLD / USDT Perp'],
+    ['CRVUSDT','CRV / USDT Perp'],
+    ['DOGEUSDT','DOGE / USDT Perp'],
+    ['TRXUSDT','TRX / USDT Perp'],
+    ['SEIUSDT','SEI / USDT Perp'],
+    ['SHIBUSDT','SHIB / USDT Perp'],
+    ['PEPEUSDT','PEPE / USDT Perp'],
+    ['WIFUSDT','WIF / USDT Perp'],
+    ['SANDUSDT','SAND / USDT Perp'],
+    ['MANAUSDT','MANA / USDT Perp'],
+    ['GALAUSDT','GALA / USDT Perp'],
+    ['NOTUSDT','NOT / USDT Perp'],
+    ['PNUTUSDT','PNUT / USDT Perp'],
+    ['POPCATUSDT','POPCAT / USDT Perp'],
   ];
   document.getElementById('symbolDrop').innerHTML = pairs.map(([s,l]) =>
     `<div class="sym-item${s === activeSym ? ' active' : ''}" data-s="${s}" onclick="switchSymbol(this)">${l}</div>`
@@ -2066,14 +2126,40 @@ function _showCooldown(on) {
 
 <!-- Symbol dropdown rendered at body level to escape backdrop-filter stacking context -->
 <div class="symbol-drop hide" id="symbolDrop">
-  <div class="sym-item" data-s="BTCUSDT"  onclick="switchSymbol(this)">BTC / USDT Perp</div>
-  <div class="sym-item" data-s="ETHUSDT"  onclick="switchSymbol(this)">ETH / USDT Perp</div>
-  <div class="sym-item" data-s="SOLUSDT"  onclick="switchSymbol(this)">SOL / USDT Perp</div>
-  <div class="sym-item" data-s="BNBUSDT"  onclick="switchSymbol(this)">BNB / USDT Perp</div>
-  <div class="sym-item" data-s="XRPUSDT"  onclick="switchSymbol(this)">XRP / USDT Perp</div>
-  <div class="sym-item" data-s="DOGEUSDT" onclick="switchSymbol(this)">DOGE / USDT Perp</div>
-  <div class="sym-item" data-s="ADAUSDT"  onclick="switchSymbol(this)">ADA / USDT Perp</div>
-  <div class="sym-item" data-s="AVAXUSDT" onclick="switchSymbol(this)">AVAX / USDT Perp</div>
+  <div class="sym-item" data-s="BTCUSDT"    onclick="switchSymbol(this)">BTC / USDT Perp</div>
+  <div class="sym-item" data-s="ETHUSDT"    onclick="switchSymbol(this)">ETH / USDT Perp</div>
+  <div class="sym-item" data-s="SOLUSDT"    onclick="switchSymbol(this)">SOL / USDT Perp</div>
+  <div class="sym-item" data-s="BNBUSDT"    onclick="switchSymbol(this)">BNB / USDT Perp</div>
+  <div class="sym-item" data-s="LTCUSDT"    onclick="switchSymbol(this)">LTC / USDT Perp</div>
+  <div class="sym-item" data-s="LINKUSDT"   onclick="switchSymbol(this)">LINK / USDT Perp</div>
+  <div class="sym-item" data-s="XRPUSDT"    onclick="switchSymbol(this)">XRP / USDT Perp</div>
+  <div class="sym-item" data-s="ADAUSDT"    onclick="switchSymbol(this)">ADA / USDT Perp</div>
+  <div class="sym-item" data-s="AVAXUSDT"   onclick="switchSymbol(this)">AVAX / USDT Perp</div>
+  <div class="sym-item" data-s="DOTUSDT"    onclick="switchSymbol(this)">DOT / USDT Perp</div>
+  <div class="sym-item" data-s="ATOMUSDT"   onclick="switchSymbol(this)">ATOM / USDT Perp</div>
+  <div class="sym-item" data-s="NEARUSDT"   onclick="switchSymbol(this)">NEAR / USDT Perp</div>
+  <div class="sym-item" data-s="UNIUSDT"    onclick="switchSymbol(this)">UNI / USDT Perp</div>
+  <div class="sym-item" data-s="INJUSDT"    onclick="switchSymbol(this)">INJ / USDT Perp</div>
+  <div class="sym-item" data-s="OPUSDT"     onclick="switchSymbol(this)">OP / USDT Perp</div>
+  <div class="sym-item" data-s="ARBUSDT"    onclick="switchSymbol(this)">ARB / USDT Perp</div>
+  <div class="sym-item" data-s="SUIUSDT"    onclick="switchSymbol(this)">SUI / USDT Perp</div>
+  <div class="sym-item" data-s="APTUSDT"    onclick="switchSymbol(this)">APT / USDT Perp</div>
+  <div class="sym-item" data-s="TIAUSDT"    onclick="switchSymbol(this)">TIA / USDT Perp</div>
+  <div class="sym-item" data-s="JUPUSDT"    onclick="switchSymbol(this)">JUP / USDT Perp</div>
+  <div class="sym-item" data-s="WLDUSDT"    onclick="switchSymbol(this)">WLD / USDT Perp</div>
+  <div class="sym-item" data-s="CRVUSDT"    onclick="switchSymbol(this)">CRV / USDT Perp</div>
+  <div class="sym-item" data-s="DOGEUSDT"   onclick="switchSymbol(this)">DOGE / USDT Perp</div>
+  <div class="sym-item" data-s="TRXUSDT"    onclick="switchSymbol(this)">TRX / USDT Perp</div>
+  <div class="sym-item" data-s="SEIUSDT"    onclick="switchSymbol(this)">SEI / USDT Perp</div>
+  <div class="sym-item" data-s="SHIBUSDT"   onclick="switchSymbol(this)">SHIB / USDT Perp</div>
+  <div class="sym-item" data-s="PEPEUSDT"   onclick="switchSymbol(this)">PEPE / USDT Perp</div>
+  <div class="sym-item" data-s="WIFUSDT"    onclick="switchSymbol(this)">WIF / USDT Perp</div>
+  <div class="sym-item" data-s="SANDUSDT"   onclick="switchSymbol(this)">SAND / USDT Perp</div>
+  <div class="sym-item" data-s="MANAUSDT"   onclick="switchSymbol(this)">MANA / USDT Perp</div>
+  <div class="sym-item" data-s="GALAUSDT"   onclick="switchSymbol(this)">GALA / USDT Perp</div>
+  <div class="sym-item" data-s="NOTUSDT"    onclick="switchSymbol(this)">NOT / USDT Perp</div>
+  <div class="sym-item" data-s="PNUTUSDT"   onclick="switchSymbol(this)">PNUT / USDT Perp</div>
+  <div class="sym-item" data-s="POPCATUSDT" onclick="switchSymbol(this)">POPCAT / USDT Perp</div>
 </div>
 
 <!-- Budget popover — at body level to escape header stacking context -->
