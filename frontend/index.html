@@ -128,13 +128,17 @@ header{
 
 .symbol-drop{
   position:fixed;
-  min-width:200px;
+  min-width:260px;
   background:var(--card);border:1px solid var(--border2);
-  border-radius:10px;overflow:hidden auto;z-index:9999;
-  max-height:min(420px,65vh);
+  border-radius:10px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  z-index:9999;
+  max-height:min(460px,70vh);
   box-shadow:0 16px 48px rgba(0,0,0,0.6),0 0 0 1px rgba(0,212,212,0.08);
   animation:dropIn .18s cubic-bezier(.4,0,.2,1);
   scrollbar-width:thin;scrollbar-color:var(--border2) transparent;
+  -webkit-overflow-scrolling:touch;
 }
 .symbol-drop::-webkit-scrollbar{width:4px}
 .symbol-drop::-webkit-scrollbar-track{background:transparent}
@@ -777,9 +781,15 @@ footer .sep{color:var(--border2)}
 .m-tab-center.active .m-tab-icon{box-shadow:0 0 16px rgba(0,212,212,.45)}
 .m-tab-center svg{color:#0B0E11;width:18px;height:18px;stroke-width:2.2}
 
-/* Desktop: tab-signals is a transparent grid pass-through */
+/* Desktop: tab-signals is a transparent block wrapper */
 @media (min-width:768px){
-  #tab-signals{display:contents}
+  #tab-signals{display:block;width:100%}
+}
+
+/* Medium screens (768–1280px): 2 rows of 3 signals so nothing gets cut off */
+@media (max-width:1280px) and (min-width:768px){
+  #app{grid-template-rows:28px 64px auto 1fr 28px}
+  .signals-row{grid-template-columns:repeat(3,1fr);padding:8px 16px;gap:8px}
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -2297,6 +2307,20 @@ function connect() {
       // ── Header stats ──────────────────────────────────────────────────
       document.getElementById('hdrPrice').textContent = '$—';
       document.getElementById('hdrCycle').textContent = '#0';
+
+      // Fetch the new symbol's price immediately without waiting for next cycle
+      (async () => {
+        try {
+          const sym = data.symbol;
+          const r = await fetch(`/api/ticker/${sym}`);
+          const d = await r.json();
+          if (d.price > 0 && _currentSymbol === sym) {
+            document.getElementById('hdrPrice').textContent = '$' + fmt(d.price);
+            const mPrc = document.getElementById('mPrice');
+            if (mPrc) mPrc.textContent = '$' + fmt(d.price);
+          }
+        } catch(e) {}
+      })();
       document.getElementById('lastTs').textContent   = 'Switching...';
 
       // ── Signal cards — rebuild to scanning / neutral state ─────────────
@@ -2348,13 +2372,15 @@ function connect() {
 function handleUpdate(data) {
   document.getElementById('overlay').classList.add('hide');
 
-  // Symbol in header
-  if (data.symbol) setSymbolDisplay(data.symbol);
+  // Discard stale updates from a previous symbol cycle
+  if (data.symbol && _currentSymbol && data.symbol !== _currentSymbol) return;
 
   // Header stats
   const priceEl = document.getElementById('hdrPrice');
-  priceEl.textContent = '$' + fmt(data.price);
-  flash(priceEl);
+  if (data.price && data.price > 0) {
+    priceEl.textContent = '$' + fmt(data.price);
+    flash(priceEl);
+  }
   setEl('hdrCycle', '#' + data.cycle);
   if (data.balance != null) updateBalance(data.balance);
   if ('position' in data)   updatePosition(data.position);

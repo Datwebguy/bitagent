@@ -304,6 +304,22 @@ def trades(limit: int = 50):
     return JSONResponse(get_trade_history(limit))
 
 
+@app.get("/api/ticker/{symbol}")
+def ticker(symbol: str):
+    """Quick public price fetch — called immediately after a symbol switch."""
+    try:
+        from agent import public_get
+        data = public_get(
+            "/api/v2/mix/market/ticker",
+            {"symbol": symbol.upper(), "productType": "USDT-FUTURES"},
+        )
+        price = float(data["data"][0]["lastPr"])
+        return {"price": price}
+    except Exception as e:
+        print(f"[ticker] {e}")
+        return {"price": 0}
+
+
 @app.get("/api/position")
 def position():
     return JSONResponse(get_open_position() or {})
