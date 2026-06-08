@@ -128,7 +128,6 @@ bitagent/
 ├── frontend/
 │   └── index.html    # Single-file trading cockpit UI
 ├── requirements.txt
-├── Procfile          # Railway entry point
 ├── fly.toml          # Fly.io deployment config
 ├── Dockerfile
 └── data/             # Runtime (gitignored)

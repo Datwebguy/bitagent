@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0E11">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>BitAgent — AI Trading Cockpit</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230B0E11'/%3E%3Cpolygon points='50,5 88,27.5 88,72.5 50,95 12,72.5 12,27.5' fill='none' stroke='%2300d4aa' stroke-width='4'/%3E%3Cline x1='50' y1='50' x2='50' y2='5' stroke='%2300d4aa' stroke-width='1.8' opacity='.3'/%3E%3Cline x1='50' y1='50' x2='88' y2='27.5' stroke='%2300d4aa' stroke-width='1.8' opacity='.3'/%3E%3Cline x1='50' y1='50' x2='88' y2='72.5' stroke='%2300d4aa' stroke-width='1.8' opacity='.3'/%3E%3Cline x1='50' y1='50' x2='50' y2='95' stroke='%2300d4aa' stroke-width='1.8' opacity='.3'/%3E%3Cline x1='50' y1='50' x2='12' y2='72.5' stroke='%2300d4aa' stroke-width='1.8' opacity='.3'/%3E%3Cline x1='50' y1='50' x2='12' y2='27.5' stroke='%2300d4aa' stroke-width='1.8' opacity='.3'/%3E%3Ccircle cx='50' cy='50' r='19' fill='none' stroke='%2300d4aa' stroke-width='2.5' opacity='.7'/%3E%3Ccircle cx='50' cy='50' r='9' fill='%2300d4aa'/%3E%3Ccircle cx='50' cy='5' r='4.5' fill='%2300d4aa' opacity='.65'/%3E%3Ccircle cx='88' cy='27.5' r='4.5' fill='%2300d4aa' opacity='.65'/%3E%3Ccircle cx='88' cy='72.5' r='4.5' fill='%2300d4aa' opacity='.65'/%3E%3Ccircle cx='50' cy='95' r='4.5' fill='%2300d4aa' opacity='.65'/%3E%3Ccircle cx='12' cy='72.5' r='4.5' fill='%2300d4aa' opacity='.65'/%3E%3Ccircle cx='12' cy='27.5' r='4.5' fill='%2300d4aa' opacity='.65'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -124,12 +128,17 @@ header{
 
 .symbol-drop{
   position:fixed;
-  min-width:190px;
+  min-width:200px;
   background:var(--card);border:1px solid var(--border2);
-  border-radius:10px;overflow:hidden;z-index:9999;
+  border-radius:10px;overflow:hidden auto;z-index:9999;
+  max-height:min(420px,65vh);
   box-shadow:0 16px 48px rgba(0,0,0,0.6),0 0 0 1px rgba(0,212,212,0.08);
   animation:dropIn .18s cubic-bezier(.4,0,.2,1);
+  scrollbar-width:thin;scrollbar-color:var(--border2) transparent;
 }
+.symbol-drop::-webkit-scrollbar{width:4px}
+.symbol-drop::-webkit-scrollbar-track{background:transparent}
+.symbol-drop::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 .symbol-drop.hide{display:none}
 @keyframes dropIn{
   from{opacity:0;transform:translateY(-8px) scale(.97)}
@@ -158,6 +167,20 @@ header{
   padding:10px 16px;font-size:11px;color:var(--teal);
   font-family:var(--mono);
 }
+.sym-search-wrap{
+  position:sticky;top:0;z-index:1;
+  padding:8px 10px;border-bottom:1px solid var(--border);
+  background:var(--card);
+}
+.sym-search{
+  width:100%;padding:7px 10px;
+  background:var(--card2);border:1px solid var(--border2);
+  border-radius:6px;color:var(--txt);font-family:var(--mono);
+  font-size:11px;outline:none;transition:border-color .2s,box-shadow .2s;
+}
+.sym-search:focus{border-color:rgba(0,212,212,0.4);box-shadow:0 0 0 2px rgba(0,212,212,0.08)}
+.sym-search::placeholder{color:var(--txt3)}
+.sym-no-results{padding:14px 16px;font-size:11px;color:var(--txt3);text-align:center;font-family:var(--mono)}
 
 /* ── SIGNALS ROW ─────────────────────────────────────── */
 .signals-row{
@@ -614,6 +637,10 @@ footer .sep{color:var(--border2)}
 .disconnect-btn:hover{color:var(--bear);border-color:var(--bear)}
 
 /* ── POSITION WIDGET ─────────────────────────────────── */
+/* pos/history section layout within right panel */
+#posSection{flex-shrink:0}
+#historySection{flex:1;display:flex;flex-direction:column;min-height:0}
+
 .pos-widget{
   padding:11px 16px;border-bottom:1px solid var(--border);
   flex-shrink:0;background:rgba(0,0,0,0.15);
@@ -680,6 +707,328 @@ footer .sep{color:var(--border2)}
   height:100%;background:var(--teal);border-radius:2px;
   transition:width 1s linear;
 }
+
+/* ═══════════════════════════════════════════════════════
+   SKELETON SHIMMER
+   ═══════════════════════════════════════════════════════ */
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.skel{
+  background:linear-gradient(90deg,var(--border) 25%,var(--border2) 50%,var(--border) 75%);
+  background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite;
+  border-radius:4px;color:transparent!important;pointer-events:none;user-select:none;
+}
+@media(prefers-reduced-motion:reduce){.skel{animation:none;background:var(--border)}}
+
+/* ═══════════════════════════════════════════════════════
+   BOTTOM SHEET
+   ═══════════════════════════════════════════════════════ */
+.sheet-backdrop{
+  position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.6);
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.sheet-backdrop.open{opacity:1;pointer-events:all}
+.bottom-sheet{
+  position:fixed;bottom:0;left:0;right:0;z-index:1001;
+  background:var(--card);border-radius:20px 20px 0 0;
+  border-top:1px solid var(--border2);
+  padding-bottom:max(16px,env(safe-area-inset-bottom,0px));
+  transform:translateY(100%);
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
+  max-height:80vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+.bottom-sheet.open{transform:translateY(0)}
+.sheet-handle{width:40px;height:4px;border-radius:2px;background:var(--border2);margin:12px auto 0}
+.sheet-title{font-size:13px;font-weight:700;color:var(--txt);padding:14px 20px 12px;border-bottom:1px solid var(--border)}
+.sheet-body{padding:16px 20px}
+.sheet-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}
+.sheet-row:last-child{border-bottom:none}
+.sheet-key{color:var(--txt3);letter-spacing:.06em;text-transform:uppercase;font-size:10px}
+.sheet-val{font-family:var(--mono);color:var(--txt)}
+.sheet-btn-row{display:flex;gap:10px;padding:0 20px 4px;margin-top:4px}
+.sheet-btn{flex:1;padding:15px;border-radius:10px;border:none;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;min-height:52px;-webkit-tap-highlight-color:transparent}
+.sheet-btn.primary{background:linear-gradient(135deg,var(--teal),#0099CC);color:#fff}
+.sheet-btn.danger{background:rgba(246,70,93,.1);border:1px solid rgba(246,70,93,.3);color:var(--bear)}
+.sheet-btn.secondary{background:var(--card2);border:1px solid var(--border2);color:var(--txt2)}
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE TAB BAR
+   ═══════════════════════════════════════════════════════ */
+.m-tab-bar{
+  display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
+  height:calc(56px + env(safe-area-inset-bottom,0px));
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  background:rgba(11,14,17,.97);border-top:1px solid var(--border);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
+.m-tab{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;background:none;border:none;cursor:pointer;
+  color:var(--txt3);font-family:var(--sans);font-size:10px;font-weight:500;
+  border-top:2px solid transparent;transition:color .2s,border-color .2s;
+  padding:0 4px;min-width:44px;height:56px;
+  -webkit-tap-highlight-color:transparent;
+}
+.m-tab svg{width:20px;height:20px;flex-shrink:0;stroke-width:1.8}
+.m-tab.active{color:var(--teal);border-top-color:var(--teal)}
+.m-tab-center .m-tab-icon{
+  background:var(--teal);border-radius:50%;
+  width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+}
+.m-tab-center.active .m-tab-icon{box-shadow:0 0 16px rgba(0,212,212,.45)}
+.m-tab-center svg{color:#0B0E11;width:18px;height:18px;stroke-width:2.2}
+
+/* Desktop: tab-signals is a transparent grid pass-through */
+@media (min-width:768px){
+  #tab-signals{display:contents}
+}
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE-ONLY ELEMENTS (hidden on desktop by default)
+   ═══════════════════════════════════════════════════════ */
+.pos-close-btn{display:none}
+.m-metrics-row{display:none}
+#tab-settings{display:none}
+
+/* Toast */
+.m-toast{
+  position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);
+  left:50%;transform:translateX(-50%) translateY(-80px);
+  z-index:500;background:var(--card);border:1px solid var(--border2);
+  border-radius:10px;padding:10px 20px;font-size:12px;color:var(--txt2);
+  white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.5);
+  transition:transform .3s cubic-bezier(.4,0,.2,1);pointer-events:none;
+}
+.m-toast.show{transform:translateX(-50%) translateY(0)}
+
+/* Close-position button */
+.pos-close-btn{
+  width:calc(100% - 24px);margin:0 12px 12px;
+  padding:16px;border-radius:10px;border:none;
+  background:rgba(246,70,93,.1);border:1px solid rgba(246,70,93,.3);
+  color:var(--bear);font-family:var(--sans);font-size:14px;font-weight:700;
+  cursor:pointer;transition:background .2s,transform .1s;min-height:52px;
+  -webkit-tap-highlight-color:transparent;
+}
+.pos-close-btn:disabled{opacity:.35;cursor:not-allowed}
+.pos-close-btn:not(:disabled):hover{background:rgba(246,70,93,.18)}
+.pos-close-btn:not(:disabled):active{transform:scale(.98)}
+
+/* Mobile metrics row */
+.m-metrics-row{
+  flex-direction:row;overflow-x:auto;gap:6px;
+  padding:10px 14px 12px;border-top:1px solid var(--border);
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;flex-shrink:0;
+}
+.m-metrics-row::-webkit-scrollbar{display:none}
+.m-metric-chip{
+  flex-shrink:0;display:flex;flex-direction:column;align-items:center;
+  padding:8px 14px;border-radius:8px;
+  background:var(--card2);border:1px solid var(--border2);gap:3px;min-width:72px;
+}
+.m-metric-chip .mk{font-size:9px;letter-spacing:.1em;color:var(--txt3);text-transform:uppercase}
+.m-metric-chip .mv{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--txt)}
+.m-metric-chip .mv.teal{color:var(--teal)}
+.m-metric-chip .mv.bull{color:var(--bull)}
+.m-metric-chip .mv.bear{color:var(--bear)}
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE SETTINGS PANEL
+   ═══════════════════════════════════════════════════════ */
+#tab-settings.active{
+  display:block;
+  position:fixed;inset:0;z-index:50;
+  background:var(--bg);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:calc(env(safe-area-inset-top,0px) + 60px) 16px calc(env(safe-area-inset-bottom,0px) + 72px);
+}
+#tab-settings .s-inner{max-width:480px;margin:0 auto}
+.settings-section{margin-bottom:22px}
+.settings-section-label{
+  font-size:10px;letter-spacing:.14em;color:var(--teal);
+  text-transform:uppercase;font-weight:600;margin-bottom:8px;display:block;
+}
+.m-status-card{
+  padding:14px 16px;border-radius:10px;background:var(--card);border:1px solid var(--border2);
+  display:flex;align-items:center;gap:10px;margin-bottom:8px;
+}
+.m-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.m-status-dot.live{background:var(--bull);box-shadow:0 0 8px var(--bull)}
+.m-status-dot.off{background:var(--txt3)}
+.m-status-text{font-size:12px;color:var(--txt);flex:1}
+.m-status-sym{font-family:var(--mono);font-size:11px;color:var(--teal)}
+.m-symbol-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.m-sym-pill{
+  padding:10px 6px;border-radius:8px;border:1px solid var(--border2);
+  background:var(--card);color:var(--txt2);font-family:var(--mono);font-size:11px;
+  cursor:pointer;text-align:center;font-weight:500;
+  transition:background .15s,color .15s,border-color .15s;
+  min-height:44px;display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent;
+}
+.m-sym-pill.active{background:rgba(0,212,212,.1);border-color:rgba(0,212,212,.4);color:var(--teal)}
+.m-budget-row{display:flex;gap:8px;margin-top:4px}
+.m-budget-input{
+  flex:1;padding:13px 12px;background:var(--card2);border:1px solid var(--border2);
+  border-radius:8px;color:var(--txt);font-size:14px;outline:none;
+  transition:border-color .2s;
+}
+.m-budget-input:focus{border-color:rgba(0,212,212,.4)}
+.m-budget-btn{
+  padding:13px 20px;background:var(--teal);color:#0B0E11;
+  border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;
+  min-width:68px;
+}
+.m-risk-card{padding:6px 14px;border-radius:10px;background:var(--card);border:1px solid var(--border2)}
+.m-risk-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}
+.m-risk-row:last-child{border:none}
+.m-risk-key{color:var(--txt3)}
+.m-risk-val{font-family:var(--mono);color:var(--txt)}
+.m-settings-disconnect{
+  width:100%;padding:15px;border-radius:10px;
+  background:rgba(246,70,93,.08);border:1px solid rgba(246,70,93,.25);
+  color:var(--bear);font-family:var(--sans);font-size:14px;font-weight:600;
+  cursor:pointer;min-height:48px;transition:background .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.m-settings-disconnect:hover{background:rgba(246,70,93,.15)}
+.settings-link{font-size:10px;color:var(--txt3);text-align:center;margin-top:16px}
+.settings-link a{color:var(--teal);text-decoration:none}
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE  (< 768px) — 5-TAB LAYOUT
+   ═══════════════════════════════════════════════════════ */
+@media (max-width:767px){
+  html{overflow-x:hidden}
+  html,body{height:auto}
+  body{overflow-y:auto}
+
+  /* App: flex column */
+  #app{
+    display:flex;flex-direction:column;
+    height:auto;min-height:100dvh;overflow:visible;
+    padding-bottom:calc(56px + env(safe-area-inset-bottom,0px));
+  }
+
+  /* Header: sticky + safe area */
+  header{
+    position:sticky;top:0;z-index:100;
+    padding:env(safe-area-inset-top,0px) 12px 0;
+    min-height:calc(56px + env(safe-area-inset-top,0px));
+    flex-shrink:0;
+  }
+  .brand-sub,.live-pill{display:none}
+  .logo-mark{width:28px;height:28px}
+  .brand-name{font-size:13px}
+  .brand{gap:8px}
+  .hdr-right{gap:4px}
+  .stat-chip{padding:4px 10px;min-width:72px}
+  .stat-chip .val{font-size:11px}
+  .hdr-right>.stat-chip:nth-child(3){display:none}
+  .disconnect-btn{display:none}
+
+  /* Show tab bar + mobile elements, hide desktop extras */
+  .m-tab-bar{display:flex}
+  .pos-close-btn{display:block}
+  .m-metrics-row{display:flex}
+  .ticker-wrap{display:none}
+  footer{display:none}
+
+  /* Main row: single column */
+  .main-row{
+    display:flex;flex-direction:column;
+    overflow:visible;padding:0;gap:0;flex:1;
+  }
+
+  /* Signals row */
+  .signals-row{grid-template-columns:repeat(2,1fr);padding:10px;gap:8px}
+
+  /* Tab content visibility via data-active-tab on #app */
+  #tab-signals,#rightPanel{display:none}
+  #tab-overview{display:flex}
+
+  /* overview */
+  #app[data-active-tab="overview"] #tab-overview{display:flex}
+  #app[data-active-tab="overview"] #tab-signals,
+  #app[data-active-tab="overview"] #rightPanel{display:none}
+
+  /* signals */
+  #app[data-active-tab="signals"] #tab-signals{display:block}
+  #app[data-active-tab="signals"] #tab-overview,
+  #app[data-active-tab="signals"] #rightPanel{display:none}
+
+  /* position */
+  #app[data-active-tab="position"] #rightPanel{display:flex;flex-direction:column}
+  #app[data-active-tab="position"] #posSection{display:block}
+  #app[data-active-tab="position"] #historySection{display:none}
+  #app[data-active-tab="position"] #tab-overview,
+  #app[data-active-tab="position"] #tab-signals{display:none}
+
+  /* history */
+  #app[data-active-tab="history"] #rightPanel{display:flex;flex-direction:column;flex:1}
+  #app[data-active-tab="history"] #historySection{display:flex;flex-direction:column;flex:1}
+  #app[data-active-tab="history"] #posSection{display:none}
+  #app[data-active-tab="history"] #tab-overview,
+  #app[data-active-tab="history"] #tab-signals{display:none}
+
+  /* Panel sizing */
+  .decision-panel{height:auto;flex:1}
+  #rightPanel{min-height:calc(100dvh - 56px - env(safe-area-inset-bottom,0px) - 56px)}
+  #rightPanel .panel{border-radius:0}
+  #historySection{display:flex;flex-direction:column;flex:1}
+  #historySection .log-list{flex:1;min-height:200px}
+
+  /* Position panel */
+  #posSection .pos-widget{padding:14px 16px}
+  #posSection .pos-key{font-size:10px}
+  #posSection .pos-val{font-size:14px;font-weight:600}
+
+  /* Modals */
+  .connect-card{width:90vw;max-width:420px}
+  .symbol-drop{max-height:55vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .log-list{-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE — PHONE  (≤ 480px)
+   ═══════════════════════════════════════════════════════ */
+@media (max-width:480px){
+  header{padding:env(safe-area-inset-top,0px) 8px 0}
+  .logo-mark{width:24px;height:24px}
+  .brand-name{font-size:11px}
+  .hdr-right>.stat-chip:nth-child(2){display:none}
+  .hdr-right>.stat-chip:nth-child(5){display:none}
+  .symbol-chip{min-width:110px}
+  .stat-chip{min-width:60px}
+  .stat-chip .val{font-size:10px}
+
+  .signals-row{padding:8px;gap:5px}
+  .sig-card{padding:8px 8px 6px}
+  .sig-value{font-size:15px;margin-bottom:4px}
+  .sig-metrics{gap:2px;margin-bottom:6px}
+  .sig-metric .mk,.sig-name{font-size:8px}
+
+  .dir-arrow-wrap{width:64px;height:64px;margin-bottom:6px}
+  .dir-arrow{font-size:22px}
+  .dir-name{font-size:13px}
+  .gauge-svg{width:130px;height:78px}
+  .gauge-pct{font-size:18px}
+  .params-strip{grid-template-columns:repeat(2,1fr);padding:6px 10px 8px;gap:4px}
+  .param-val{font-size:11px}
+  .reasoning-txt{font-size:11px;min-height:28px}
+  .exec-bar{padding:8px 12px;gap:8px;flex-wrap:wrap}
+  .exec-bar-badge{display:none}
+
+  .connect-card{width:96vw;max-height:92vh;overflow-y:auto;overflow-x:hidden}
+  .connect-top{padding:20px 16px 16px}
+  .connect-body{padding:16px}
+  #budgetPop{left:8px!important;right:8px!important;width:auto!important;min-width:0!important}
+  .intro-logo-text{font-size:32px}
+  .intro-tag{font-size:11px}
+  .intro-pillars{flex-direction:column;gap:16px;align-items:center;margin-bottom:36px}
+  .intro-enter{padding:12px 32px}
+
+  .m-symbol-grid{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
@@ -738,14 +1087,16 @@ footer .sep{color:var(--border2)}
     </div>
   </header>
 
-  <!-- SIGNALS ROW (built by JS) -->
-  <div class="signals-row" id="signalsRow"></div>
+  <!-- SIGNALS ROW (mobile: Signals tab; desktop: inline) -->
+  <div id="tab-signals">
+    <div class="signals-row" id="signalsRow"></div>
+  </div>
 
   <!-- MAIN ROW -->
   <div class="main-row">
 
-    <!-- DECISION PANEL -->
-    <div class="panel decision-panel">
+    <!-- DECISION PANEL / OVERVIEW TAB -->
+    <div class="panel decision-panel" id="tab-overview">
       <div class="panel-hdr">
         <span class="panel-title">Agent Decision Engine</span>
         <span class="panel-tag" id="lastTs">Waiting...</span>
@@ -814,46 +1165,79 @@ footer .sep{color:var(--border2)}
         <div class="exec-bar-detail" id="execDetailNormal">Waiting for first agent cycle...</div>
         <div class="exec-bar-badge" id="execBadge">—</div>
       </div>
+      <!-- Mobile: quick-glance metrics strip (scrollable) -->
+      <div class="m-metrics-row" id="mMetricsRow" aria-label="Quick metrics">
+        <div class="m-metric-chip">
+          <span class="mk">Balance</span>
+          <span class="mv teal" id="mBalance">$—</span>
+        </div>
+        <div class="m-metric-chip">
+          <span class="mk">Position</span>
+          <span class="mv" id="mPos">FLAT</span>
+        </div>
+        <div class="m-metric-chip">
+          <span class="mk">Cycle</span>
+          <span class="mv" id="mCycle">#0</span>
+        </div>
+        <div class="m-metric-chip">
+          <span class="mk">Price</span>
+          <span class="mv" id="mPrice">$—</span>
+        </div>
+        <div class="m-metric-chip">
+          <span class="mk">Uptime</span>
+          <span class="mv" id="mUptime">00:00:00</span>
+        </div>
+      </div>
     </div>
 
     <!-- RIGHT PANEL: Position + Tabs -->
-    <div class="panel">
+    <div class="panel" id="rightPanel">
 
-      <!-- Position widget -->
-      <div class="pos-widget" id="posWidget">
-        <div class="pos-widget-hdr">
-          <span class="pos-widget-title">◆ Open Position</span>
-          <span class="pos-badge flat" id="posBadge">FLAT</span>
+      <!-- POSITION SECTION (mobile: Position tab) -->
+      <div id="posSection">
+        <div class="pos-widget" id="posWidget">
+          <div class="pos-widget-hdr">
+            <span class="pos-widget-title">◆ Open Position</span>
+            <span class="pos-badge flat" id="posBadge">FLAT</span>
+          </div>
+          <div class="pos-rows" id="posRows">
+            <div class="pos-empty" style="grid-column:1/-1">No open position</div>
+          </div>
         </div>
-        <div class="pos-rows" id="posRows">
-          <div class="pos-empty" style="grid-column:1/-1">No open position</div>
-        </div>
+        <!-- Mobile close-position button -->
+        <button class="pos-close-btn" id="posCloseBtn" disabled
+          onclick="openCloseSheet()" aria-label="Close open position">
+          ✕ &nbsp;Close Position
+        </button>
       </div>
 
-      <!-- Tabs -->
-      <div class="tab-bar">
-        <button class="tab-btn active" data-tab="decisions" onclick="showTab('decisions')">Agent Log</button>
-        <button class="tab-btn" data-tab="trades" onclick="showTab('trades')">Trade History</button>
-        <span class="tab-count" id="tabCount">0 decisions</span>
-      </div>
-
-      <!-- Decision log (default visible) -->
-      <div class="log-list" id="logList">
-        <div class="log-empty">
-          <span style="font-size:22px;opacity:.3">◈</span>
-          <span>Agent is starting up</span>
-          <span style="color:var(--txt3)">First cycle in ~60s</span>
+      <!-- HISTORY SECTION (mobile: History tab; desktop: below position) -->
+      <div id="historySection">
+        <!-- Tabs -->
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="decisions" onclick="showTab('decisions')">Agent Log</button>
+          <button class="tab-btn" data-tab="trades" onclick="showTab('trades')">Trade History</button>
+          <span class="tab-count" id="tabCount">0 decisions</span>
         </div>
-      </div>
 
-      <!-- Trade history (hidden until tab clicked) -->
-      <div class="log-list" id="tradeList" style="display:none">
-        <div class="log-empty">
-          <span style="font-size:22px;opacity:.3">◈</span>
-          <span>No executed trades yet</span>
-          <span style="color:var(--txt3)">Trades appear here after execution</span>
+        <!-- Decision log (default visible) -->
+        <div class="log-list" id="logList">
+          <div class="log-empty">
+            <span style="font-size:22px;opacity:.3">◈</span>
+            <span>Agent is starting up</span>
+            <span style="color:var(--txt3)">First cycle in ~60s</span>
+          </div>
         </div>
-      </div>
+
+        <!-- Trade history (hidden until tab clicked) -->
+        <div class="log-list" id="tradeList" style="display:none">
+          <div class="log-empty">
+            <span style="font-size:22px;opacity:.3">◈</span>
+            <span>No executed trades yet</span>
+            <span style="color:var(--txt3)">Trades appear here after execution</span>
+          </div>
+        </div>
+      </div><!-- /historySection -->
 
     </div>
 
@@ -865,7 +1249,7 @@ footer .sep{color:var(--border2)}
     <span class="sep">|</span>
     <span><span class="lbl">Interval</span> <span class="val">60s</span></span>
     <span class="sep">|</span>
-    <span><span class="lbl">Signals</span> <span class="val">5 Active</span></span>
+    <span><span class="lbl">Signals</span> <span class="val">6 Active</span></span>
     <span class="sep">|</span>
     <span><span class="lbl">Model</span> <span class="val">Qwen + Rules</span></span>
     <span class="sep">|</span>
@@ -875,6 +1259,140 @@ footer .sep{color:var(--border2)}
   </footer>
 
 </div><!-- /app -->
+
+<!-- MOBILE SETTINGS PANEL -->
+<div id="tab-settings" role="dialog" aria-label="Settings">
+  <div class="s-inner">
+    <div class="settings-section">
+      <span class="settings-section-label">Connection</span>
+      <div class="m-status-card" id="mStatusCard">
+        <div class="m-status-dot off" id="mStatusDot"></div>
+        <div class="m-status-text">
+          <span id="mStatusTxt">Not connected</span>
+          &nbsp;·&nbsp; <span class="m-status-sym" id="mStatusSym">—</span>
+        </div>
+        <button class="disconnect-btn" onclick="doDisconnect()" id="mDisconnectBtn"
+          style="display:none;padding:4px 10px;font-size:9px">Disconnect</button>
+      </div>
+    </div>
+    <div class="settings-section" id="mSymSection">
+      <span class="settings-section-label">Switch Symbol</span>
+      <div class="m-symbol-grid" id="mSymGrid"><!-- filled by JS --></div>
+    </div>
+    <div class="settings-section" id="mBudgetSection">
+      <span class="settings-section-label">Trade Budget</span>
+      <div class="m-budget-row">
+        <input class="m-budget-input" id="mBudgetInput" type="number"
+          placeholder="e.g. 50" min="0" step="1">
+        <button class="m-budget-btn" onclick="mSetBudget()">Set</button>
+      </div>
+    </div>
+    <div class="settings-section">
+      <span class="settings-section-label">Risk Parameters</span>
+      <div class="m-risk-card">
+        <div class="m-risk-row">
+          <span class="m-risk-key">Leverage</span>
+          <span class="m-risk-val" id="mRiskLev">5×</span>
+        </div>
+        <div class="m-risk-row">
+          <span class="m-risk-key">Risk per Trade</span>
+          <span class="m-risk-val" id="mRiskPct">2%</span>
+        </div>
+        <div class="m-risk-row">
+          <span class="m-risk-key">Mode</span>
+          <span class="m-risk-val" id="mRiskMode">—</span>
+        </div>
+        <div class="m-risk-row">
+          <span class="m-risk-key">Model</span>
+          <span class="m-risk-val">Qwen + Rules</span>
+        </div>
+        <div class="m-risk-row">
+          <span class="m-risk-key">Interval</span>
+          <span class="m-risk-val">60s</span>
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <button class="m-settings-disconnect" onclick="doDisconnect()">
+        Disconnect Account
+      </button>
+    </div>
+    <div class="settings-link">
+      <a href="https://github.com/Datwebguy/bitagent" target="_blank" rel="noopener">
+        BitAgent · Bitget AI Base Camp S1
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM SHEET BACKDROP -->
+<div class="sheet-backdrop" id="sheetBackdrop" onclick="closeSheet()"></div>
+
+<!-- CLOSE POSITION BOTTOM SHEET -->
+<div class="bottom-sheet" id="closePosSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">Close Position</div>
+  <div class="sheet-body">
+    <div class="sheet-row">
+      <span class="sheet-key">Symbol</span>
+      <span class="sheet-val" id="sheetSym">—</span>
+    </div>
+    <div class="sheet-row">
+      <span class="sheet-key">Side</span>
+      <span class="sheet-val" id="sheetSide">—</span>
+    </div>
+    <div class="sheet-row">
+      <span class="sheet-key">Size</span>
+      <span class="sheet-val" id="sheetSize">—</span>
+    </div>
+    <div class="sheet-row">
+      <span class="sheet-key">Entry Price</span>
+      <span class="sheet-val" id="sheetEntry">—</span>
+    </div>
+    <div class="sheet-row">
+      <span class="sheet-key">Unrealised P&amp;L</span>
+      <span class="sheet-val" id="sheetPnl">—</span>
+    </div>
+  </div>
+  <div class="sheet-btn-row">
+    <button class="sheet-btn secondary" onclick="closeSheet()">Cancel</button>
+    <button class="sheet-btn danger" onclick="confirmClosePosition()">Close Position</button>
+  </div>
+</div>
+
+<!-- TOAST NOTIFICATION -->
+<div class="m-toast" id="mToast"></div>
+
+<!-- MOBILE TAB BAR -->
+<nav class="m-tab-bar" role="tablist" aria-label="Navigation">
+  <button class="m-tab active" id="mtab-overview" role="tab"
+    aria-selected="true" onclick="switchMobileTab('overview')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+    Overview
+  </button>
+  <button class="m-tab" id="mtab-signals" role="tab"
+    aria-selected="false" onclick="switchMobileTab('signals')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Signals
+  </button>
+  <button class="m-tab m-tab-center" id="mtab-position" role="tab"
+    aria-selected="false" onclick="switchMobileTab('position')">
+    <div class="m-tab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    </div>
+    Position
+  </button>
+  <button class="m-tab" id="mtab-history" role="tab"
+    aria-selected="false" onclick="switchMobileTab('history')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+    History
+  </button>
+  <button class="m-tab" id="mtab-settings" role="tab"
+    aria-selected="false" onclick="switchMobileTab('settings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Settings
+  </button>
+</nav>
 
 <!-- CONNECTING OVERLAY -->
 <div id="overlay">
@@ -915,7 +1433,7 @@ footer .sep{color:var(--border2)}
     <div class="intro-pillars">
       <div class="intro-pillar">
         <div class="intro-pillar-icon">◈</div>
-        <div class="intro-pillar-title">5 Live Signals</div>
+        <div class="intro-pillar-title">6 Live Signals</div>
         <div class="intro-pillar-desc">Real market data</div>
       </div>
       <div class="intro-pillar">
@@ -968,48 +1486,7 @@ footer .sep{color:var(--border2)}
       <div class="connect-field">
         <label class="connect-label">Trading Pair</label>
         <select class="connect-input" id="inputSymbol" style="cursor:pointer">
-          <optgroup label="── Major">
-            <option value="BTCUSDT">BTC / USDT Perpetual</option>
-            <option value="ETHUSDT">ETH / USDT Perpetual</option>
-            <option value="SOLUSDT">SOL / USDT Perpetual</option>
-            <option value="BNBUSDT">BNB / USDT Perpetual</option>
-            <option value="LTCUSDT">LTC / USDT Perpetual</option>
-            <option value="LINKUSDT">LINK / USDT Perpetual</option>
-          </optgroup>
-          <optgroup label="── Large Cap Alts">
-            <option value="XRPUSDT">XRP / USDT Perpetual</option>
-            <option value="ADAUSDT">ADA / USDT Perpetual</option>
-            <option value="AVAXUSDT">AVAX / USDT Perpetual</option>
-            <option value="DOTUSDT">DOT / USDT Perpetual</option>
-            <option value="ATOMUSDT">ATOM / USDT Perpetual</option>
-            <option value="NEARUSDT">NEAR / USDT Perpetual</option>
-            <option value="UNIUSDT">UNI / USDT Perpetual</option>
-          </optgroup>
-          <optgroup label="── Layer 2 / DeFi">
-            <option value="INJUSDT">INJ / USDT Perpetual</option>
-            <option value="OPUSDT">OP / USDT Perpetual</option>
-            <option value="ARBUSDT">ARB / USDT Perpetual</option>
-            <option value="SUIUSDT">SUI / USDT Perpetual</option>
-            <option value="APTUSDT">APT / USDT Perpetual</option>
-            <option value="TIAUSDT">TIA / USDT Perpetual</option>
-            <option value="JUPUSDT">JUP / USDT Perpetual</option>
-            <option value="WLDUSDT">WLD / USDT Perpetual</option>
-            <option value="CRVUSDT">CRV / USDT Perpetual</option>
-          </optgroup>
-          <optgroup label="── Low-Cost (trade from $0.50)">
-            <option value="DOGEUSDT">DOGE / USDT Perpetual</option>
-            <option value="TRXUSDT">TRX / USDT Perpetual</option>
-            <option value="SEIUSDT">SEI / USDT Perpetual</option>
-            <option value="SHIBUSDT">SHIB / USDT Perpetual</option>
-            <option value="PEPEUSDT">PEPE / USDT Perpetual</option>
-            <option value="WIFUSDT">WIF / USDT Perpetual</option>
-            <option value="SANDUSDT">SAND / USDT Perpetual</option>
-            <option value="MANAUSDT">MANA / USDT Perpetual</option>
-            <option value="GALAUSDT">GALA / USDT Perpetual</option>
-            <option value="NOTUSDT">NOT / USDT Perpetual</option>
-            <option value="PNUTUSDT">PNUT / USDT Perpetual</option>
-            <option value="POPCATUSDT">POPCAT / USDT Perpetual</option>
-          </optgroup>
+          <!-- Populated by rebuildConnectSelect() on page load -->
         </select>
       </div>
       <div class="connect-field">
@@ -1071,17 +1548,17 @@ const NODES = Array.from({length: 70}, () => ({
 
 let introRunning  = true;
 let _introSkipped = false;
-let _initPayload  = null;   // stored from WebSocket init — used when intro ends
+let _initPayload  = null;
 
 function skipIntro() {
   if (_introSkipped) return;
   _introSkipped = true;
   introRunning  = false;
+  try { localStorage.setItem('bitagent_intro_seen', '1'); } catch(e) {}
 
   const screen = document.getElementById('introScreen');
   screen.classList.add('hide');
 
-  // After fade-out, show the right next screen
   setTimeout(() => {
     if (_initPayload && _initPayload.creds_set) {
       hideConnectScreen();
@@ -1092,11 +1569,12 @@ function skipIntro() {
   }, 950);
 }
 
-// Auto-advance: wait long enough for all animations + reading time
-// Last animation ends at ~2.7s; give user 8s total before auto-advancing
-setTimeout(() => {
-  if (!_introSkipped) skipIntro();
-}, 9500);
+// Skip intro immediately on revisit; otherwise auto-advance after 9.5s
+if (localStorage.getItem('bitagent_intro_seen') === '1') {
+  skipIntro();
+} else {
+  setTimeout(() => { if (!_introSkipped) skipIntro(); }, 9500);
+}
 
 function drawIntro() {
   if (!introRunning) return;
@@ -1595,6 +2073,27 @@ async function doDisconnect() {
   document.getElementById('connectBtn').textContent = 'Connect & Start Trading Agent';
 }
 
+// Populate the connect form's symbol select from _PAIRS
+function rebuildConnectSelect() {
+  const sel = document.getElementById('inputSymbol');
+  if (!sel) return;
+  const current = sel.value;
+  const groups = [
+    { label: '── Major',              syms: ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','AVAXUSDT','DOTUSDT','LINKUSDT','ATOMUSDT','LTCUSDT','AAVEUSDT'] },
+    { label: '── Mid-Cap Alts',       syms: ['NEARUSDT','UNIUSDT','INJUSDT','APTUSDT','SUIUSDT','ARBUSDT','OPUSDT','TIAUSDT','JUPUSDT','WLDUSDT','CRVUSDT','FILUSDT','ICPUSDT','ALGOUSDT','EGLDUSDT','AXSUSDT','LDOUSDT','GRTUSDT','DYDXUSDT','RUNEUSDT','FTMUSDT','APEUSDT','GMTUSDT','ASTRUSDT','FLOWUSDT','KAVAUSDT','XLMUSDT','ETCUSDT','VETUSDT','HBARUSDT'] },
+    { label: '── DeFi / Governance',  syms: ['COMPUSDT','MKRUSDT','YFIUSDT','SNXUSDT','SUSHIUSDT','1INCHUSDT','ENSUSDT','RDNTUSDT','MAGICUSDT','MASKUSDT'] },
+    { label: '── Gaming / Metaverse', syms: ['SANDUSDT','MANAUSDT','GALAUSDT','CHZUSDT','ENJUSDT','ALICEUSDT','THETAUSDT','CAKEUSDT','TWTUSDT'] },
+    { label: '── Infrastructure',     syms: ['ANKRUSDT','ROSEUSDT','CELRUSDT','OCEANUSDT','STORJUSDT','ZILUSDT','KSMUSDT','HOTUSDT','BTTUSDT'] },
+    { label: '── Low-Cost (from $0.50)', syms: ['DOGEUSDT','TRXUSDT','SHIBUSDT','PEPEUSDT','WIFUSDT','NOTUSDT','FLOKIUSDT','TURBOUSDT','POPCATUSDT','PNUTUSDT','MOODENGUSDT','SEIUSDT','PYTHUSDT','BLURUSDT','JASMYUSDT'] },
+  ];
+  const pairMap = Object.fromEntries(_PAIRS.map(([s,b]) => [s, `${b} / USDT Perpetual`]));
+  sel.innerHTML = groups.map(g =>
+    `<optgroup label="${g.label}">${
+      g.syms.filter(s => pairMap[s]).map(s => `<option value="${s}">${pairMap[s]}</option>`).join('')
+    }</optgroup>`
+  ).join('');
+  if (current && sel.querySelector(`option[value="${current}"]`)) sel.value = current;
+}
 // Allow Enter key to submit
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !document.getElementById('connectScreen').classList.contains('hide')) {
@@ -1603,6 +2102,41 @@ document.addEventListener('keydown', e => {
 });
 
 // ── SYMBOL SWITCHER ───────────────────────────────────
+
+// Single source of truth for all available trading pairs
+const _PAIRS = [
+  // Major
+  ['BTCUSDT','BTC'],['ETHUSDT','ETH'],['SOLUSDT','SOL'],['BNBUSDT','BNB'],
+  ['XRPUSDT','XRP'],['ADAUSDT','ADA'],['AVAXUSDT','AVAX'],['DOTUSDT','DOT'],
+  ['LINKUSDT','LINK'],['ATOMUSDT','ATOM'],['LTCUSDT','LTC'],['AAVEUSDT','AAVE'],
+  // Mid-cap Alts
+  ['NEARUSDT','NEAR'],['UNIUSDT','UNI'],['INJUSDT','INJ'],['APTUSDT','APT'],
+  ['SUIUSDT','SUI'],['ARBUSDT','ARB'],['OPUSDT','OP'],['TIAUSDT','TIA'],
+  ['JUPUSDT','JUP'],['WLDUSDT','WLD'],['CRVUSDT','CRV'],['FILUSDT','FIL'],
+  ['ICPUSDT','ICP'],['ALGOUSDT','ALGO'],['EGLDUSDT','EGLD'],['AXSUSDT','AXS'],
+  ['LDOUSDT','LDO'],['GRTUSDT','GRT'],['DYDXUSDT','DYDX'],['RUNEUSDT','RUNE'],
+  ['FTMUSDT','FTM'],['APEUSDT','APE'],['GMTUSDT','GMT'],['ASTRUSDT','ASTR'],
+  ['FLOWUSDT','FLOW'],['KAVAUSDT','KAVA'],['XLMUSDT','XLM'],['ETCUSDT','ETC'],
+  ['VETUSDT','VET'],['HBARUSDT','HBAR'],
+  // DeFi / Governance
+  ['COMPUSDT','COMP'],['MKRUSDT','MKR'],['YFIUSDT','YFI'],['SNXUSDT','SNX'],
+  ['SUSHIUSDT','SUSHI'],['1INCHUSDT','1INCH'],['ENSUSDT','ENS'],
+  ['RDNTUSDT','RDNT'],['MAGICUSDT','MAGIC'],['MASKUSDT','MASK'],
+  // Gaming / Metaverse
+  ['SANDUSDT','SAND'],['MANAUSDT','MANA'],['GALAUSDT','GALA'],['CHZUSDT','CHZ'],
+  ['ENJUSDT','ENJ'],['ALICEUSDT','ALICE'],['THETAUSDT','THETA'],
+  ['CAKEUSDT','CAKE'],['TWTUSDT','TWT'],
+  // Infrastructure / Other
+  ['ANKRUSDT','ANKR'],['ROSEUSDT','ROSE'],['CELRUSDT','CELR'],['OCEANUSDT','OCEAN'],
+  ['STORJUSDT','STORJ'],['ZILUSDT','ZIL'],['KSMUSDT','KSM'],
+  ['HOTUSDT','HOT'],['BTTUSDT','BTT'],
+  // Low-Cost / Meme
+  ['DOGEUSDT','DOGE'],['TRXUSDT','TRX'],['SHIBUSDT','SHIB'],['PEPEUSDT','PEPE'],
+  ['WIFUSDT','WIF'],['NOTUSDT','NOT'],['FLOKIUSDT','FLOKI'],['TURBOUSDT','TURBO'],
+  ['POPCATUSDT','POPCAT'],['PNUTUSDT','PNUT'],['MOODENGUSDT','MOODENG'],
+  ['SEIUSDT','SEI'],['PYTHUSDT','PYTH'],['BLURUSDT','BLUR'],['JASMYUSDT','JASMY'],
+];
+
 function setSymbolDisplay(symbol) {
   const base = symbol.replace('USDT','');
   document.getElementById('symbolVal').textContent = `${base}/USDT PERP`;
@@ -1617,11 +2151,16 @@ function toggleSymbolDrop() {
   const isOpen = !drop.classList.contains('hide');
 
   if (!isOpen) {
-    // Position using fixed coords so it escapes grid/overflow clipping
     const r = chip.getBoundingClientRect();
     drop.style.top   = (r.bottom + 6) + 'px';
     drop.style.right = (window.innerWidth - r.right) + 'px';
     drop.style.left  = 'auto';
+    // Reset search filter when opening
+    filterSymbolItems('');
+    setTimeout(() => {
+      const s = document.getElementById('symSearch');
+      if (s) { s.value = ''; s.focus(); }
+    }, 40);
   }
 
   drop.classList.toggle('hide', isOpen);
@@ -1657,44 +2196,35 @@ async function switchSymbol(el) {
 }
 
 function rebuildSymbolDrop(activeSym) {
-  const pairs = [
-    ['BTCUSDT','BTC / USDT Perp'],
-    ['ETHUSDT','ETH / USDT Perp'],
-    ['SOLUSDT','SOL / USDT Perp'],
-    ['BNBUSDT','BNB / USDT Perp'],
-    ['LTCUSDT','LTC / USDT Perp'],
-    ['LINKUSDT','LINK / USDT Perp'],
-    ['XRPUSDT','XRP / USDT Perp'],
-    ['ADAUSDT','ADA / USDT Perp'],
-    ['AVAXUSDT','AVAX / USDT Perp'],
-    ['DOTUSDT','DOT / USDT Perp'],
-    ['ATOMUSDT','ATOM / USDT Perp'],
-    ['NEARUSDT','NEAR / USDT Perp'],
-    ['UNIUSDT','UNI / USDT Perp'],
-    ['INJUSDT','INJ / USDT Perp'],
-    ['OPUSDT','OP / USDT Perp'],
-    ['ARBUSDT','ARB / USDT Perp'],
-    ['SUIUSDT','SUI / USDT Perp'],
-    ['APTUSDT','APT / USDT Perp'],
-    ['TIAUSDT','TIA / USDT Perp'],
-    ['JUPUSDT','JUP / USDT Perp'],
-    ['WLDUSDT','WLD / USDT Perp'],
-    ['CRVUSDT','CRV / USDT Perp'],
-    ['DOGEUSDT','DOGE / USDT Perp'],
-    ['TRXUSDT','TRX / USDT Perp'],
-    ['SEIUSDT','SEI / USDT Perp'],
-    ['SHIBUSDT','SHIB / USDT Perp'],
-    ['PEPEUSDT','PEPE / USDT Perp'],
-    ['WIFUSDT','WIF / USDT Perp'],
-    ['SANDUSDT','SAND / USDT Perp'],
-    ['MANAUSDT','MANA / USDT Perp'],
-    ['GALAUSDT','GALA / USDT Perp'],
-    ['NOTUSDT','NOT / USDT Perp'],
-    ['PNUTUSDT','PNUT / USDT Perp'],
-    ['POPCATUSDT','POPCAT / USDT Perp'],
-  ];
-  document.getElementById('symbolDrop').innerHTML = pairs.map(([s,l]) =>
-    `<div class="sym-item${s === activeSym ? ' active' : ''}" data-s="${s}" onclick="switchSymbol(this)">${l}</div>`
+  const drop = document.getElementById('symbolDrop');
+  drop.innerHTML =
+    `<div class="sym-search-wrap">
+      <input class="sym-search" id="symSearch" type="text"
+        placeholder="Search ${_PAIRS.length} pairs…"
+        oninput="filterSymbolItems(this.value)"
+        onclick="event.stopPropagation()"
+        autocomplete="off" spellcheck="false">
+    </div>
+    <div id="symItemList"></div>`;
+  _symActiveSym = activeSym;
+  filterSymbolItems('');
+}
+
+let _symActiveSym = 'BTCUSDT';
+
+function filterSymbolItems(filter) {
+  const list = document.getElementById('symItemList');
+  if (!list) return;
+  const lf = filter.toLowerCase().replace('/', '').replace(' ', '');
+  const filtered = lf
+    ? _PAIRS.filter(([s, b]) => b.toLowerCase().includes(lf) || s.toLowerCase().includes(lf))
+    : _PAIRS;
+  if (!filtered.length) {
+    list.innerHTML = `<div class="sym-no-results">No matches for "${filter}"</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(([s, b]) =>
+    `<div class="sym-item${s === _symActiveSym ? ' active' : ''}" data-s="${s}" onclick="switchSymbol(this)">${b} / USDT Perp</div>`
   ).join('');
 }
 
@@ -1828,6 +2358,7 @@ function handleUpdate(data) {
   setEl('hdrCycle', '#' + data.cycle);
   if (data.balance != null) updateBalance(data.balance);
   if ('position' in data)   updatePosition(data.position);
+  syncMobileMetrics();
 
   // Timestamp
   const d = new Date(data.ts);
@@ -1991,40 +2522,6 @@ function updateBalance(bal) {
 
 
 // ══════════════════════════════════════════════════════
-// POSITION WIDGET
-// ══════════════════════════════════════════════════════
-function updatePosition(pos) {
-  const badge  = document.getElementById('posBadge');
-  const rows   = document.getElementById('posRows');
-  const hdrVal = document.getElementById('hdrPosVal');
-
-  if (!pos || !pos.holdSide) {
-    if (badge)  { badge.className = 'pos-badge flat'; badge.textContent = 'FLAT'; }
-    if (hdrVal) { hdrVal.textContent = 'FLAT'; hdrVal.style.color = 'var(--txt3)'; }
-    if (rows)   rows.innerHTML = '<div class="pos-empty" style="grid-column:1/-1">No open position</div>';
-    return;
-  }
-
-  const side   = pos.holdSide.toLowerCase();
-  const isBull = side === 'long';
-  if (badge)  { badge.className = `pos-badge ${isBull ? 'long' : 'short'}`; badge.textContent = side.toUpperCase(); }
-  if (hdrVal) { hdrVal.textContent = side.toUpperCase(); hdrVal.style.color = isBull ? 'var(--bull)' : 'var(--bear)'; }
-
-  const base   = (pos.symbol || 'BTCUSDT').replace('USDT','');
-  const size   = parseFloat(pos.total || pos.available || 0);
-  const entry  = parseFloat(pos.entryPrice || 0);
-  const openedAt = pos.openedAt ? new Date(pos.openedAt).toLocaleTimeString('en-US',{hour12:false}) : '—';
-
-  if (rows) rows.innerHTML = `
-    <div class="pos-row"><span class="pos-key">Side</span><span class="pos-val ${isBull?'bull':'bear'}">${side.toUpperCase()}</span></div>
-    <div class="pos-row"><span class="pos-key">Size</span><span class="pos-val">${size} ${base}</span></div>
-    ${entry > 0 ? `<div class="pos-row"><span class="pos-key">Entry</span><span class="pos-val">$${fmt(entry)}</span></div>` : ''}
-    <div class="pos-row"><span class="pos-key">Opened</span><span class="pos-val">${openedAt}</span></div>
-  `;
-}
-
-
-// ══════════════════════════════════════════════════════
 // TRADE HISTORY TAB
 // ══════════════════════════════════════════════════════
 let _activeTab = 'decisions';
@@ -2122,45 +2619,259 @@ function _showCooldown(on) {
   if (wrap)   wrap.style.display   = on ? '' : 'none';
   if (normal) normal.style.display = on ? 'none' : '';
 }
+
+// ══════════════════════════════════════════════════════
+// MOBILE: UPTIME SYNC
+// ══════════════════════════════════════════════════════
+setInterval(() => {
+  const el = document.getElementById('uptime');
+  const mel = document.getElementById('mUptime');
+  if (el && mel) mel.textContent = el.textContent;
+}, 1000);
+
+
+// ══════════════════════════════════════════════════════
+// MOBILE: TAB NAVIGATION
+// ══════════════════════════════════════════════════════
+let _mActiveTab = 'overview';
+
+function switchMobileTab(tab) {
+  if (window.innerWidth > 767) return;
+
+  _mActiveTab = tab;
+  const app = document.getElementById('app');
+
+  if (tab === 'settings') {
+    document.getElementById('tab-settings').classList.add('active');
+    app.removeAttribute('data-active-tab');
+    populateMSettings();
+  } else {
+    document.getElementById('tab-settings').classList.remove('active');
+    app.setAttribute('data-active-tab', tab);
+  }
+
+  document.querySelectorAll('.m-tab').forEach(btn => {
+    const t = btn.id.replace('mtab-', '');
+    btn.classList.toggle('active', t === tab);
+    btn.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+  });
+
+  if (tab === 'history') {
+    loadTradeHistory();
+  }
+}
+
+
+// ══════════════════════════════════════════════════════
+// MOBILE: METRICS ROW SYNC
+// ══════════════════════════════════════════════════════
+function syncMobileMetrics() {
+  const hdrBal = document.getElementById('hdrBalance');
+  const hdrPos = document.getElementById('hdrPosVal');
+  const hdrCyc = document.getElementById('hdrCycle');
+  const hdrPrc = document.getElementById('hdrPrice');
+
+  const mBal = document.getElementById('mBalance');
+  const mPos = document.getElementById('mPos');
+  const mCyc = document.getElementById('mCycle');
+  const mPrc = document.getElementById('mPrice');
+
+  if (hdrBal && mBal) mBal.textContent = hdrBal.textContent;
+  if (hdrPos && mPos) {
+    mPos.textContent = hdrPos.textContent;
+    mPos.className = 'mv ' + (
+      hdrPos.textContent === 'LONG'  ? 'bull' :
+      hdrPos.textContent === 'SHORT' ? 'bear' : ''
+    );
+  }
+  if (hdrCyc && mCyc) mCyc.textContent = hdrCyc.textContent;
+  if (hdrPrc && mPrc) mPrc.textContent = hdrPrc.textContent;
+}
+
+
+// ══════════════════════════════════════════════════════
+// MOBILE: CLOSE-POSITION BOTTOM SHEET
+// ══════════════════════════════════════════════════════
+let _posSnapshot = null;
+
+function updatePosition(pos) {
+  const badge  = document.getElementById('posBadge');
+  const rows   = document.getElementById('posRows');
+  const hdrVal = document.getElementById('hdrPosVal');
+  const closeBtn = document.getElementById('posCloseBtn');
+
+  if (!pos || !pos.holdSide) {
+    if (badge)    { badge.className = 'pos-badge flat'; badge.textContent = 'FLAT'; }
+    if (hdrVal)   { hdrVal.textContent = 'FLAT'; hdrVal.style.color = 'var(--txt3)'; }
+    if (rows)     rows.innerHTML = '<div class="pos-empty" style="grid-column:1/-1">No open position</div>';
+    if (closeBtn) closeBtn.disabled = true;
+    _posSnapshot = null;
+    syncMobileMetrics();
+    return;
+  }
+
+  _posSnapshot = pos;
+  const side   = pos.holdSide.toLowerCase();
+  const isBull = side === 'long';
+  if (badge)  { badge.className = `pos-badge ${isBull ? 'long' : 'short'}`; badge.textContent = side.toUpperCase(); }
+  if (hdrVal) { hdrVal.textContent = side.toUpperCase(); hdrVal.style.color = isBull ? 'var(--bull)' : 'var(--bear)'; }
+  if (closeBtn) closeBtn.disabled = false;
+
+  const base    = (pos.symbol || 'BTCUSDT').replace('USDT','');
+  const size    = parseFloat(pos.total || pos.available || 0);
+  const entry   = parseFloat(pos.entryPrice || 0);
+  const openedAt = pos.openedAt ? new Date(pos.openedAt).toLocaleTimeString('en-US',{hour12:false}) : '—';
+
+  if (rows) rows.innerHTML = `
+    <div class="pos-row"><span class="pos-key">Side</span><span class="pos-val ${isBull?'bull':'bear'}">${side.toUpperCase()}</span></div>
+    <div class="pos-row"><span class="pos-key">Size</span><span class="pos-val">${size} ${base}</span></div>
+    ${entry > 0 ? `<div class="pos-row"><span class="pos-key">Entry</span><span class="pos-val">$${fmt(entry)}</span></div>` : ''}
+    <div class="pos-row"><span class="pos-key">Opened</span><span class="pos-val">${openedAt}</span></div>
+  `;
+  syncMobileMetrics();
+}
+
+function openCloseSheet() {
+  if (!_posSnapshot) return;
+  const pos  = _posSnapshot;
+  const base = (pos.symbol || 'BTCUSDT').replace('USDT','');
+  const size = parseFloat(pos.total || pos.available || 0);
+  const entry = parseFloat(pos.entryPrice || 0);
+
+  document.getElementById('sheetSym').textContent   = pos.symbol || '—';
+  document.getElementById('sheetSide').textContent  = (pos.holdSide || '—').toUpperCase();
+  document.getElementById('sheetSize').textContent  = `${size} ${base}`;
+  document.getElementById('sheetEntry').textContent = entry > 0 ? `$${fmt(entry)}` : '—';
+  document.getElementById('sheetPnl').textContent   = pos.unrealisedPl != null
+    ? `$${fmt(pos.unrealisedPl)}` : '—';
+
+  document.getElementById('sheetBackdrop').classList.add('open');
+  document.getElementById('closePosSheet').classList.add('open');
+}
+
+function closeSheet() {
+  document.getElementById('sheetBackdrop').classList.remove('open');
+  document.getElementById('closePosSheet').classList.remove('open');
+}
+
+async function confirmClosePosition() {
+  closeSheet();
+  try {
+    const res = await fetch('/api/close-position', {method: 'POST'});
+    const data = await res.json();
+    showMToast(data.ok ? 'Position closed' : (data.error || 'Close failed'));
+  } catch(e) {
+    showMToast('Request failed');
+  }
+}
+
+
+// ══════════════════════════════════════════════════════
+// MOBILE: SETTINGS PANEL
+// ══════════════════════════════════════════════════════
+function populateMSettings() {
+  const connected = !!(_initPayload && _initPayload.creds_set);
+  const sym = document.getElementById('symbolVal')?.textContent || '—';
+
+  const dot  = document.getElementById('mStatusDot');
+  const txt  = document.getElementById('mStatusTxt');
+  const symEl = document.getElementById('mStatusSym');
+  const discBtn = document.getElementById('mDisconnectBtn');
+
+  if (dot)    { dot.className = 'm-status-dot ' + (connected ? 'live' : 'off'); }
+  if (txt)    txt.textContent = connected ? 'Connected' : 'Not connected';
+  if (symEl)  symEl.textContent = connected ? sym : '—';
+  if (discBtn) discBtn.style.display = connected ? '' : 'none';
+
+  const mode  = document.getElementById('footerMode')?.textContent || '—';
+  const mMode = document.getElementById('mRiskMode');
+  if (mMode) mMode.textContent = mode;
+
+  const bal = parseFloat(document.getElementById('hdrBalance')?.textContent?.replace(/[^0-9.]/g,'')) || 0;
+  const mBudgetInput = document.getElementById('mBudgetInput');
+  if (mBudgetInput && bal > 0) mBudgetInput.placeholder = `Current: $${bal.toFixed(0)}`;
+
+  buildMSymGrid(sym);
+}
+
+function buildMSymGrid(activeSym) {
+  const grid = document.getElementById('mSymGrid');
+  if (!grid) return;
+  const top12 = _PAIRS.slice(0, 12);
+  grid.innerHTML = top12.map(([s, b]) =>
+    `<button class="m-sym-pill${s === activeSym + 'USDT' || b === activeSym ? ' active' : ''}"
+      onclick="mSwitchSymbol('${s}')">${b}</button>`
+  ).join('');
+}
+
+function mSwitchSymbol(sym) {
+  switchSymbol({ dataset: { s: sym } });
+  document.querySelectorAll('.m-sym-pill').forEach(p => {
+    p.classList.toggle('active', p.textContent === sym.replace('USDT',''));
+  });
+  showMToast(`Switching to ${sym.replace('USDT','')}...`);
+  setTimeout(() => switchMobileTab('overview'), 400);
+}
+
+async function mSetBudget() {
+  const input = document.getElementById('mBudgetInput');
+  const v = parseFloat(input.value) || 0;
+  input.value = '';
+  try {
+    await fetch('/api/set-budget', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({budget:v})});
+    _manualBudget = v;
+    updateBalance(v > 0 ? v : 0);
+    showMToast(v > 0 ? `Budget set: $${v}` : 'Budget cleared');
+  } catch(e) { showMToast('Failed to set budget'); }
+}
+
+
+// ══════════════════════════════════════════════════════
+// MOBILE: TOAST
+// ══════════════════════════════════════════════════════
+let _toastTimer = null;
+function showMToast(msg, dur = 2800) {
+  const el = document.getElementById('mToast');
+  if (!el) return;
+  if (_toastTimer) clearTimeout(_toastTimer);
+  el.textContent = msg;
+  el.classList.add('show');
+  _toastTimer = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+
+// ══════════════════════════════════════════════════════
+// MOBILE: SWIPE-DOWN SHEET DISMISS
+// ══════════════════════════════════════════════════════
+(function() {
+  let _sy = 0;
+  const sheet = () => document.getElementById('closePosSheet');
+  document.addEventListener('touchstart', e => {
+    if (sheet()?.classList.contains('open')) _sy = e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener('touchend', e => {
+    if (!sheet()?.classList.contains('open')) return;
+    if (e.changedTouches[0].clientY - _sy > 60) closeSheet();
+  }, {passive:true});
+})();
+
+
+// ══════════════════════════════════════════════════════
+// MOBILE: INIT — set default tab on mobile
+// ══════════════════════════════════════════════════════
+(function initMobile() {
+  if (window.innerWidth > 767) return;
+  const app = document.getElementById('app');
+  app.setAttribute('data-active-tab', 'overview');
+})();
+
+
+// Populate connect form select from _PAIRS (called after _PAIRS is defined above)
+rebuildConnectSelect();
 </script>
 
-<!-- Symbol dropdown rendered at body level to escape backdrop-filter stacking context -->
-<div class="symbol-drop hide" id="symbolDrop">
-  <div class="sym-item" data-s="BTCUSDT"    onclick="switchSymbol(this)">BTC / USDT Perp</div>
-  <div class="sym-item" data-s="ETHUSDT"    onclick="switchSymbol(this)">ETH / USDT Perp</div>
-  <div class="sym-item" data-s="SOLUSDT"    onclick="switchSymbol(this)">SOL / USDT Perp</div>
-  <div class="sym-item" data-s="BNBUSDT"    onclick="switchSymbol(this)">BNB / USDT Perp</div>
-  <div class="sym-item" data-s="LTCUSDT"    onclick="switchSymbol(this)">LTC / USDT Perp</div>
-  <div class="sym-item" data-s="LINKUSDT"   onclick="switchSymbol(this)">LINK / USDT Perp</div>
-  <div class="sym-item" data-s="XRPUSDT"    onclick="switchSymbol(this)">XRP / USDT Perp</div>
-  <div class="sym-item" data-s="ADAUSDT"    onclick="switchSymbol(this)">ADA / USDT Perp</div>
-  <div class="sym-item" data-s="AVAXUSDT"   onclick="switchSymbol(this)">AVAX / USDT Perp</div>
-  <div class="sym-item" data-s="DOTUSDT"    onclick="switchSymbol(this)">DOT / USDT Perp</div>
-  <div class="sym-item" data-s="ATOMUSDT"   onclick="switchSymbol(this)">ATOM / USDT Perp</div>
-  <div class="sym-item" data-s="NEARUSDT"   onclick="switchSymbol(this)">NEAR / USDT Perp</div>
-  <div class="sym-item" data-s="UNIUSDT"    onclick="switchSymbol(this)">UNI / USDT Perp</div>
-  <div class="sym-item" data-s="INJUSDT"    onclick="switchSymbol(this)">INJ / USDT Perp</div>
-  <div class="sym-item" data-s="OPUSDT"     onclick="switchSymbol(this)">OP / USDT Perp</div>
-  <div class="sym-item" data-s="ARBUSDT"    onclick="switchSymbol(this)">ARB / USDT Perp</div>
-  <div class="sym-item" data-s="SUIUSDT"    onclick="switchSymbol(this)">SUI / USDT Perp</div>
-  <div class="sym-item" data-s="APTUSDT"    onclick="switchSymbol(this)">APT / USDT Perp</div>
-  <div class="sym-item" data-s="TIAUSDT"    onclick="switchSymbol(this)">TIA / USDT Perp</div>
-  <div class="sym-item" data-s="JUPUSDT"    onclick="switchSymbol(this)">JUP / USDT Perp</div>
-  <div class="sym-item" data-s="WLDUSDT"    onclick="switchSymbol(this)">WLD / USDT Perp</div>
-  <div class="sym-item" data-s="CRVUSDT"    onclick="switchSymbol(this)">CRV / USDT Perp</div>
-  <div class="sym-item" data-s="DOGEUSDT"   onclick="switchSymbol(this)">DOGE / USDT Perp</div>
-  <div class="sym-item" data-s="TRXUSDT"    onclick="switchSymbol(this)">TRX / USDT Perp</div>
-  <div class="sym-item" data-s="SEIUSDT"    onclick="switchSymbol(this)">SEI / USDT Perp</div>
-  <div class="sym-item" data-s="SHIBUSDT"   onclick="switchSymbol(this)">SHIB / USDT Perp</div>
-  <div class="sym-item" data-s="PEPEUSDT"   onclick="switchSymbol(this)">PEPE / USDT Perp</div>
-  <div class="sym-item" data-s="WIFUSDT"    onclick="switchSymbol(this)">WIF / USDT Perp</div>
-  <div class="sym-item" data-s="SANDUSDT"   onclick="switchSymbol(this)">SAND / USDT Perp</div>
-  <div class="sym-item" data-s="MANAUSDT"   onclick="switchSymbol(this)">MANA / USDT Perp</div>
-  <div class="sym-item" data-s="GALAUSDT"   onclick="switchSymbol(this)">GALA / USDT Perp</div>
-  <div class="sym-item" data-s="NOTUSDT"    onclick="switchSymbol(this)">NOT / USDT Perp</div>
-  <div class="sym-item" data-s="PNUTUSDT"   onclick="switchSymbol(this)">PNUT / USDT Perp</div>
-  <div class="sym-item" data-s="POPCATUSDT" onclick="switchSymbol(this)">POPCAT / USDT Perp</div>
-</div>
+<!-- Symbol dropdown — rendered at body level to escape backdrop-filter stacking context. Populated by rebuildSymbolDrop(). -->
+<div class="symbol-drop hide" id="symbolDrop"></div>
 
 <!-- Budget popover — at body level to escape header stacking context -->
 <div id="budgetPop" style="display:none;position:fixed;z-index:9999;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:0 8px 32px #000a;min-width:220px">
