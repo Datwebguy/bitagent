@@ -1,4 +1,5 @@
 import asyncio, json, os
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,29 @@ from agent import (
 )
 
 AUTH_ERROR_CODES = {"40001", "40002", "40003", "40004", "40005", "40031"}
+
+# Thread pool for blocking I/O (requests, openai SDK) — keeps the event loop free
+_executor = ThreadPoolExecutor(max_workers=8)
+
+_SIG_DEFAULTS = {
+    "technical":  {"signal": "NEUTRAL", "rsi": 50, "stoch_rsi": 50,
+                   "trend": "FLAT", "macd": "FLAT", "bb_pct": 0.5, "price": 0.0},
+    "sentiment":  {"signal": "NEUTRAL", "funding_rate": 0, "long_short_ratio": 1,
+                   "fear_greed": 50, "fear_greed_label": "Neutral", "note": ""},
+    "macro":      {"signal": "NEUTRAL", "btc_dominance": 50, "mcap_change_24h": 0, "note": ""},
+    "momentum":   {"signal": "NEUTRAL", "change_24h_pct": 0, "volume_24h_usd": 0,
+                   "range_position": 50, "open_interest": 0},
+    "depth":      {"signal": "NEUTRAL", "imbalance": 0.0, "spread_pct": 0.0},
+    "volatility": {"signal": "NEUTRAL", "regime": "UNKNOWN", "atr_pct": 0.0},
+}
+
+
+def _safe_signal(key: str, fn):
+    try:
+        return fn()
+    except Exception as e:
+        print(f"[signal:{key}] {e}")
+        return _SIG_DEFAULTS[key]
 
 
 @asynccontextmanager
@@ -73,41 +97,32 @@ async def agent_loop():
 
         _cycle += 1
         try:
-            # Snapshot symbol at cycle start — prevents race condition where a
-            # mid-cycle switch would tag BTC signals with the new SOL symbol.
+            loop = asyncio.get_running_loop()
+            # Snapshot symbol — prevents a mid-cycle switch from tagging wrong symbol
             sym = agent.SYMBOL
 
-            _NEUTRAL_DEFAULTS = {
-                "technical":  {"signal": "NEUTRAL", "rsi": 50, "stoch_rsi": 50,
-                               "trend": "FLAT", "macd": "FLAT", "bb_pct": 0.5, "price": 0.0},
-                "sentiment":  {"signal": "NEUTRAL", "funding_rate": 0, "long_short_ratio": 1,
-                               "fear_greed": 50, "fear_greed_label": "Neutral", "note": ""},
-                "macro":      {"signal": "NEUTRAL", "btc_dominance": 50, "mcap_change_24h": 0, "note": ""},
-                "momentum":   {"signal": "NEUTRAL", "change_24h_pct": 0, "volume_24h_usd": 0,
-                               "range_position": 50, "open_interest": 0},
-                "depth":      {"signal": "NEUTRAL", "imbalance": 0.0, "spread_pct": 0.0},
-                "volatility": {"signal": "NEUTRAL", "regime": "UNKNOWN", "atr_pct": 0.0},
-            }
+            # Run all 6 signals in parallel inside a thread pool.
+            # requests.get() is blocking — running it in threads keeps the event loop
+            # free so WebSocket pings and reconnects are never starved.
+            sig_results = await asyncio.gather(
+                loop.run_in_executor(_executor, _safe_signal, "technical",  get_technical_signal),
+                loop.run_in_executor(_executor, _safe_signal, "sentiment",  get_sentiment_signal),
+                loop.run_in_executor(_executor, _safe_signal, "macro",      get_macro_signal),
+                loop.run_in_executor(_executor, _safe_signal, "momentum",   get_momentum_signal),
+                loop.run_in_executor(_executor, _safe_signal, "depth",      get_depth_signal),
+                loop.run_in_executor(_executor, _safe_signal, "volatility", get_volatility_signal),
+            )
+            signals = dict(zip(
+                ("technical", "sentiment", "macro", "momentum", "depth", "volatility"),
+                sig_results,
+            ))
 
-            def _safe(key, fn):
-                try:
-                    return fn()
-                except Exception as e:
-                    print(f"[signal:{key}] {e}")
-                    return _NEUTRAL_DEFAULTS[key]
-
-            signals = {
-                "technical":  _safe("technical",  get_technical_signal),
-                "sentiment":  _safe("sentiment",  get_sentiment_signal),
-                "macro":      _safe("macro",       get_macro_signal),
-                "momentum":   _safe("momentum",   get_momentum_signal),
-                "depth":      _safe("depth",       get_depth_signal),
-                "volatility": _safe("volatility", get_volatility_signal),
-            }
-            decision  = apply_risk_rules(reason_with_qwen(signals))
-            execution = execute_trade(decision, signals)
+            # Qwen SDK is also blocking — run in thread pool
+            decision_raw = await loop.run_in_executor(_executor, reason_with_qwen, signals)
+            decision  = apply_risk_rules(decision_raw)
+            execution = await loop.run_in_executor(_executor, execute_trade, decision, signals)
             price     = signals["technical"]["price"]
-            _balance  = get_futures_balance()
+            _balance  = await loop.run_in_executor(_executor, get_futures_balance)
 
             # Session PnL tracker — resets on restart; see trade journal for history
             if _last_dir == "LONG" and _last_price > 0:
@@ -132,7 +147,7 @@ async def agent_loop():
             save_log(_cycle, signals, decision)
             _consecutive_errors = 0
 
-            pos   = get_open_position()
+            pos = await loop.run_in_executor(_executor, get_open_position)
             state = {
                 "type":       "update",
                 "cycle":      _cycle,
