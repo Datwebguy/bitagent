@@ -404,6 +404,16 @@ def get_open_position() -> dict | None:
 
 
 # ─── ORDER EXECUTION ──────────────────────────────────────────────────────────
+def _price_dp(price: float) -> int:
+    """Decimal places to use for a price of this magnitude (covers BTC down to DOGE)."""
+    if price >= 1000: return 1
+    if price >= 100:  return 2
+    if price >= 10:   return 3
+    if price >= 1:    return 4
+    if price >= 0.1:  return 5
+    return 6
+
+
 def place_order(side: str, trade_side: str, size: str,
                 sl: float = None, tp: float = None) -> dict:
     if _is_unified_account:
@@ -422,9 +432,9 @@ def place_order(side: str, trade_side: str, size: str,
         if trade_side == "close":
             body["reduceOnly"] = "yes"
         if sl and trade_side == "open":
-            body["stopLossPrice"]   = str(round(sl, 2))
+            body["stopLossPrice"]   = str(round(sl, _price_dp(sl)))
         if tp and trade_side == "open":
-            body["takeProfitPrice"] = str(round(tp, 2))
+            body["takeProfitPrice"] = str(round(tp, _price_dp(tp)))
         return _safe_post("/api/v3/trade/place-order", body)
 
     body = {
@@ -438,9 +448,9 @@ def place_order(side: str, trade_side: str, size: str,
         "orderType":   "market",
     }
     if sl and trade_side == "open":
-        body["presetStopLossPrice"]   = str(round(sl, 2))
+        body["presetStopLossPrice"]   = str(round(sl, _price_dp(sl)))
     if tp and trade_side == "open":
-        body["presetTakeProfitPrice"] = str(round(tp, 2))
+        body["presetTakeProfitPrice"] = str(round(tp, _price_dp(tp)))
     return _safe_post("/api/v2/mix/order/place-order", body)
 
 
@@ -853,8 +863,8 @@ def _rule_based_decision(signals: dict) -> dict:
         "stop_loss":    round(price - dist if direction == "LONG" else price + dist, 2),
         "take_profit":  round(price + dist * 2 if direction == "LONG" else price - dist * 2, 2),
         "signal_votes": dict(zip(
-            ("technical", "sentiment", "momentum", "depth", "volatility"), votes)),
-        "reasoning":    f"Rule-based: {bulls} bullish, {bears} bearish signals out of 5.",
+            ("technical", "sentiment", "macro", "momentum", "depth", "volatility"), votes)),
+        "reasoning":    f"Rule-based: {bulls} bullish, {bears} bearish signals out of 6.",
         "risk_note":    "No LLM key — rule-based fallback active.",
     }
 
@@ -907,6 +917,7 @@ def run():
             signals  = {
                 "technical":  get_technical_signal(),
                 "sentiment":  get_sentiment_signal(),
+                "macro":      get_macro_signal(),
                 "momentum":   get_momentum_signal(),
                 "depth":      get_depth_signal(),
                 "volatility": get_volatility_signal(),

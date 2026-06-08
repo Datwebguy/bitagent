@@ -209,20 +209,23 @@ async def connect(req: ConnectRequest):
     if req.budget > 0:
         set_manual_balance(req.budget)
 
-    balance = get_futures_balance()
-    if balance == 0.0:
-        try:
-            r    = agent._auth_get_raw("/api/v2/spot/account/assets", {"coin": "USDT"})
-            code = r.get("code", "")
-            # Auth error codes indicate bad credentials; 40404/40085 = valid key, wrong endpoint
-            if code in AUTH_ERROR_CODES:
-                set_credentials("", "", "")
-                return {"ok": False, "error": f"Invalid API credentials: {r.get('msg')}"}
-        except Exception as e:
-            set_credentials("", "", "")
-            return {"ok": False, "error": f"Could not reach Bitget: {e}"}
+    loop = asyncio.get_running_loop()
 
-    pos = get_open_position()
+    # Always probe auth — budget > 0 used to skip this, allowing bad credentials through
+    try:
+        r    = await loop.run_in_executor(None, lambda: agent._auth_get_raw(
+                   "/api/v2/spot/account/assets", {"coin": "USDT"}))
+        code = r.get("code", "")
+        # Auth error codes indicate bad credentials; 40404/40085 = valid key, wrong endpoint
+        if code in AUTH_ERROR_CODES:
+            set_credentials("", "", "")
+            return {"ok": False, "error": f"Invalid API credentials: {r.get('msg')}"}
+    except Exception as e:
+        set_credentials("", "", "")
+        return {"ok": False, "error": f"Could not reach Bitget: {e}"}
+
+    balance = await loop.run_in_executor(None, get_futures_balance)
+    pos     = await loop.run_in_executor(None, get_open_position)
     await _broadcast({"type": "connected", "balance": balance, "symbol": sym, "position": pos})
     return {"ok": True, "balance": balance, "symbol": sym, "position": pos}
 
@@ -249,7 +252,8 @@ class BudgetRequest(BaseModel):
 @app.post("/api/set-budget")
 async def set_budget_route(req: BudgetRequest):
     set_manual_balance(req.budget)
-    bal = get_futures_balance()
+    loop = asyncio.get_running_loop()
+    bal  = await loop.run_in_executor(None, get_futures_balance)
     await _broadcast({"type": "balance_update", "balance": round(bal, 2)})
     return {"ok": True, "balance": round(bal, 2)}
 
