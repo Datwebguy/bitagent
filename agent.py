@@ -36,7 +36,7 @@ EXEC_COOLDOWN    = int(os.getenv("EXEC_COOLDOWN", "300"))
 MAX_DAILY_TRADES = int(os.getenv("MAX_DAILY_TRADES", "10"))
 
 MIN_LOT_SIZES = {
-    # Major — high price, need more balance
+    # Major
     "BTC":   0.0001, "ETH":  0.01,  "SOL":  0.1,   "BNB":  0.01,
     "LTC":   0.1,    "LINK": 1.0,   "AAVE": 0.1,
     # Mid-range
@@ -44,12 +44,28 @@ MIN_LOT_SIZES = {
     "ATOM":  1.0,    "NEAR": 1.0,   "UNI":  1.0,   "INJ":  0.1,
     "APT":   0.001,  "SUI":  0.1,   "TIA":  0.1,   "JUP":  1.0,
     "WLD":   1.0,    "CRV":  1.0,   "OP":   0.1,   "ARB":  0.01,
-    # Low-cost — tradeable with $0.50+
+    # Layer-1 / Ecosystems
+    "FIL":   0.1,    "ICP":  0.1,   "ALGO": 1.0,   "EGLD": 0.1,
+    "FLOW":  1.0,    "ASTR": 1.0,   "ETC":  0.1,   "XLM":  1.0,
+    "VET":   10.0,   "HBAR": 10.0,  "ZIL":  10.0,  "KSM":  0.01,
+    # DeFi / Governance
+    "COMP":  0.01,   "MKR":  0.001, "YFI":  0.001, "SNX":  1.0,
+    "SUSHI": 1.0,    "RUNE": 1.0,   "1INCH":1.0,   "ENS":  1.0,
+    "LDO":   1.0,    "GRT":  10.0,  "DYDX": 1.0,   "FTM":  1.0,
+    "KAVA":  1.0,    "RDNT": 1.0,   "MAGIC":1.0,   "MASK": 1.0,
+    # Gaming / Metaverse
+    "AXS":   0.1,    "ALICE":1.0,   "THETA":1.0,   "GMT":  1.0,
+    "APE":   1.0,    "CAKE": 1.0,   "TWT":  1.0,
+    # Infrastructure / Other
+    "ANKR":  10.0,   "ROSE": 10.0,  "CELR": 10.0,  "OCEAN":1.0,
+    "STORJ": 1.0,    "BTT":  1000.0,"HOT":  1000.0,"JASMY":10.0,
+    "BLUR":  1.0,
+    # Low-cost / Meme
     "TRX":   1.0,    "DOGE": 1.0,   "SHIB": 10000.0, "PEPE": 1000.0,
     "WIF":   0.1,    "SEI":  1.0,   "SAND": 1.0,   "MANA": 1.0,
     "GALA":  1.0,    "CHZ":  20.0,  "ENJ":  3.0,   "NOT":  10.0,
-    "FLOKI": 1.0,    "TURBO": 1.0,  "PYTH": 1.0,   "POPCAT": 1.0,
-    "PNUT":  1.0,    "MOODENG": 1.0,
+    "FLOKI": 1.0,    "TURBO":1.0,   "PYTH": 1.0,   "POPCAT":1.0,
+    "PNUT":  1.0,    "MOODENG":1.0,
 }
 
 
