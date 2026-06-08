@@ -520,7 +520,7 @@ def execute_trade(decision: dict, signals: dict) -> dict:
             return result
 
     balance = get_futures_balance()
-    if balance < 3.0:
+    if balance < 0.5:
         result["detail"] = f"insufficient balance (${balance:.2f} USDT)"
         return result
 
