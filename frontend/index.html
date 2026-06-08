@@ -1535,6 +1535,32 @@ footer .sep{color:var(--border2)}
 </div>
 
 <script>
+/* ════════════════════════════════════════════════════════
+   SYMBOL-SWITCH BUG FIXES (applied in one pass)
+   ════════════════════════════════════════════════════════
+   FIX 1 — _currentSymbol updated IMMEDIATELY in switchSymbol()
+            so the stale-update guard in handleUpdate rejects
+            old-symbol WS messages from the moment the user taps.
+   FIX 2 — switchSymbol() now synchronous: clears UI before
+            POSTing, uses _isSwitching flag to block double-taps,
+            15 s timeout retries if no update arrives.
+   FIX 3 — formatSymbol(sym) is the single canonical formatter:
+            "DOGEUSDT" → "DOGE/USDT PERP". All label updates
+            route through updateSymbolLabels() which calls it.
+   FIX 4 — updateSymbolLabels() updates header chip, desktop
+            dropdown .sym-item active states, AND mobile
+            .m-sym-pill active states in one call.
+   FIX 5 — clearAllDisplayValues() resets price, cycle, gauge,
+            params, reasoning, exec bar, and agent log atomically.
+   FIX 6 — setAllSignalsLoading() rebuilds signal cards to
+            neutral scanning state in one call.
+   FIX 7 — handleUpdate logs discarded stale updates to console;
+            clears _isSwitching flag on first matching update.
+   FIX 8 — buildMSymGrid() now receives raw "BTCUSDT" symbol,
+            not the formatted display string — active pill was
+            always wrong before this fix.
+   ════════════════════════════════════════════════════════ */
+
 // ══════════════════════════════════════════════════════
 // INTRO SCREEN — constellation canvas + skip logic
 // ══════════════════════════════════════════════════════
@@ -1980,8 +2006,10 @@ function updateExecution(exec) {
 // ══════════════════════════════════════════════════════
 // TRADE LOG
 // ══════════════════════════════════════════════════════
-let _knownTs       = new Set();
-let _currentSymbol = 'BTCUSDT';
+let _knownTs        = new Set();
+let _currentSymbol  = 'BTCUSDT';
+let _isSwitching    = false;   // true between switchSymbol() call and first matching update
+let _switchTimeout  = null;    // retry handle
 
 function updateLog(history) {
   if (!history || !history.length) return;
@@ -2147,12 +2175,106 @@ const _PAIRS = [
   ['SEIUSDT','SEI'],['PYTHUSDT','PYTH'],['BLURUSDT','BLUR'],['JASMYUSDT','JASMY'],
 ];
 
-function setSymbolDisplay(symbol) {
-  const base = symbol.replace('USDT','');
-  document.getElementById('symbolVal').textContent = `${base}/USDT PERP`;
+// ── Single canonical symbol formatter ─────────────────
+function formatSymbol(sym) {
+  if (!sym) return '— / USDT PERP';
+  return sym.replace(/USDT$/, '') + '/USDT PERP';
+}
+
+// ── Update every symbol label in the UI ────────────────
+function updateSymbolLabels(sym) {
+  const displayText = formatSymbol(sym);
+  const symVal = document.getElementById('symbolVal');
+  if (symVal) symVal.textContent = displayText;
+  // Desktop dropdown items
   document.querySelectorAll('.sym-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.s === symbol);
+    el.classList.toggle('active', el.dataset.s === sym);
   });
+  // Mobile settings grid pills
+  document.querySelectorAll('.m-sym-pill').forEach(el => {
+    const base = el.textContent.trim();
+    el.classList.toggle('active', base + 'USDT' === sym);
+  });
+  // Mobile settings status sym
+  const mStatusSym = document.getElementById('mStatusSym');
+  if (mStatusSym && mStatusSym.textContent !== '—') mStatusSym.textContent = displayText;
+}
+
+// Alias kept so any residual call-sites still work
+function setSymbolDisplay(sym) { updateSymbolLabels(sym); }
+
+// ── Reset all signal cards to neutral/loading state ────
+function setAllSignalsLoading() {
+  const sigRow = document.getElementById('signalsRow');
+  if (sigRow) { sigRow.innerHTML = ''; buildSignalCards(); }
+}
+
+// ── Clear every live data element to "—" / loading ────
+function clearAllDisplayValues() {
+  // Price
+  const priceEl = document.getElementById('hdrPrice');
+  if (priceEl) priceEl.textContent = '$—';
+  const cycleEl = document.getElementById('hdrCycle');
+  if (cycleEl) cycleEl.textContent = '#0';
+  const mPrc = document.getElementById('mPrice');
+  if (mPrc) mPrc.textContent = '$—';
+  const mCyc = document.getElementById('mCycle');
+  if (mCyc) mCyc.textContent = '#0';
+
+  // Header timestamp
+  const lastTs = document.getElementById('lastTs');
+  if (lastTs) lastTs.textContent = 'Switching...';
+
+  // Direction circle
+  const wrap = document.getElementById('dirWrap');
+  if (wrap) wrap.className = 'dir-arrow-wrap neutral';
+  const arrow = document.getElementById('dirArrow');
+  if (arrow) { arrow.className = 'dir-arrow neutral'; arrow.textContent = '—'; }
+  const dirName = document.getElementById('dirName');
+  if (dirName) { dirName.className = 'dir-name neutral'; dirName.textContent = 'SWITCHING'; }
+
+  // Confidence gauge
+  const arc = document.getElementById('gaugeArc');
+  if (arc) { arc.style.strokeDashoffset = GAUGE_LEN; arc.style.stroke = '#2a2d3e'; }
+  const gPct = document.getElementById('gaugePct');
+  if (gPct) gPct.textContent = '—';
+
+  // Trade params
+  ['pEntry','pSL','pTP','pSize'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  });
+
+  // Reasoning
+  const rtxt = document.getElementById('reasoningTxt');
+  if (rtxt) rtxt.textContent = 'Switching symbol — waiting for first cycle...';
+  const rn = document.getElementById('riskNote');
+  if (rn) rn.className = 'risk-note';
+
+  // Execution bar
+  const execAction = document.getElementById('execAction');
+  if (execAction) { execAction.textContent = 'IDLE'; execAction.className = 'exec-bar-action off'; }
+  const execDot = document.getElementById('execDot');
+  if (execDot) execDot.className = 'exec-bar-dot off';
+  const execDetailNormal = document.getElementById('execDetailNormal');
+  if (execDetailNormal) execDetailNormal.textContent = 'Waiting for first agent cycle...';
+  const execBadge = document.getElementById('execBadge');
+  if (execBadge) { execBadge.textContent = '—'; execBadge.style.color = ''; execBadge.style.borderColor = ''; }
+  const cooldownWrap = document.getElementById('cooldownWrap');
+  if (cooldownWrap) cooldownWrap.style.display = 'none';
+  // Cancel any running cooldown timer
+  if (typeof _cooldownTimer !== 'undefined' && _cooldownTimer) {
+    clearInterval(_cooldownTimer); _cooldownTimer = null;
+  }
+
+  // Agent log
+  _knownTs.clear();
+  const logList = document.getElementById('logList');
+  if (logList) logList.innerHTML = `<div class="log-empty">
+    <span style="font-size:22px;opacity:.3">◈</span>
+    <span>Switching symbol...</span>
+    <span style="color:var(--txt3)">Next cycle in ~60s</span>
+  </div>`;
 }
 
 function toggleSymbolDrop() {
@@ -2177,32 +2299,64 @@ function toggleSymbolDrop() {
   chip.classList.toggle('open', !isOpen);
 }
 
-async function switchSymbol(el) {
+function switchSymbol(el) {
   const sym = el.dataset.s;
-  const drop = document.getElementById('symbolDrop');
-  const chip = document.getElementById('symbolChip');
+  if (!sym) return;
 
-  // Show switching state in dropdown
-  drop.innerHTML = `<div class="sym-switching"><span>↻</span> Switching to ${sym.replace('USDT','/USDT')}...</div>`;
-
-  try {
-    const res  = await fetch('/api/switch-symbol', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({symbol: sym}),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      setSymbolDisplay(sym);
-    }
-  } catch(e) {
-    console.error('switch failed', e);
+  // Guard: no-op if already on this symbol or a switch is in flight
+  if (_isSwitching || _currentSymbol === sym) {
+    document.getElementById('symbolDrop')?.classList.add('hide');
+    document.getElementById('symbolChip')?.classList.remove('open');
+    return;
   }
 
-  // Rebuild dropdown and close
-  rebuildSymbolDrop(sym);
-  drop.classList.add('hide');
-  chip.classList.remove('open');
+  clearTimeout(_switchTimeout);
+  _isSwitching = true;
+
+  // 1. Update _currentSymbol IMMEDIATELY — this makes the stale-update guard
+  //    correctly reject any in-flight update from the previous symbol.
+  _currentSymbol = sym;
+
+  // 2. Update every symbol label in the UI right now
+  updateSymbolLabels(sym);
+
+  // 3. Clear all stale data values
+  clearAllDisplayValues();
+
+  // 4. Reset signal cards to neutral loading state
+  setAllSignalsLoading();
+
+  // 5. Close dropdown immediately
+  document.getElementById('symbolDrop')?.classList.add('hide');
+  document.getElementById('symbolChip')?.classList.remove('open');
+
+  // 6. POST to backend (WS symbol_changed → update will arrive shortly)
+  fetch('/api/switch-symbol', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({symbol: sym}),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.ok) {
+      _isSwitching = false;
+      console.error('Symbol switch failed:', data.error);
+    }
+    // On success: stay in switching state until WS update arrives
+  })
+  .catch(err => {
+    _isSwitching = false;
+    console.error('Symbol switch error:', err);
+  });
+
+  // 7. Safety net: if no update arrives within 15s, retry once
+  _switchTimeout = setTimeout(() => {
+    if (_isSwitching) {
+      console.warn('Symbol switch timed out, retrying');
+      _isSwitching = false;
+      switchSymbol(el);
+    }
+  }, 15000);
 }
 
 function rebuildSymbolDrop(activeSym) {
@@ -2278,7 +2432,7 @@ function connect() {
       // Always pre-set symbol if known
       if (data.latest?.symbol) {
         _currentSymbol = data.latest.symbol;
-        setSymbolDisplay(data.latest.symbol);
+        updateSymbolLabels(data.latest.symbol);
         rebuildSymbolDrop(data.latest.symbol);
       }
       return;
@@ -2288,7 +2442,7 @@ function connect() {
       hideConnectScreen();
       if (data.symbol) {
         _currentSymbol = data.symbol;
-        setSymbolDisplay(data.symbol);
+        updateSymbolLabels(data.symbol);
         rebuildSymbolDrop(data.symbol);
       }
       if (data.balance != null) updateBalance(data.balance);
@@ -2300,15 +2454,17 @@ function connect() {
       return;
     }
     if (data.type === 'symbol_changed') {
+      // Ensure consistency (switchSymbol() may have already set these, but handle
+      // the case where the change originates from another client / server restart)
       _currentSymbol = data.symbol;
-      setSymbolDisplay(data.symbol);
+      updateSymbolLabels(data.symbol);
       rebuildSymbolDrop(data.symbol);
 
-      // ── Header stats ──────────────────────────────────────────────────
-      document.getElementById('hdrPrice').textContent = '$—';
-      document.getElementById('hdrCycle').textContent = '#0';
+      // Belt-and-suspenders clear in case switchSymbol() wasn't the trigger
+      clearAllDisplayValues();
+      setAllSignalsLoading();
 
-      // Fetch the new symbol's price immediately without waiting for next cycle
+      // Fetch current price immediately — don't wait up to 60s for next cycle
       (async () => {
         try {
           const sym = data.symbol;
@@ -2321,35 +2477,7 @@ function connect() {
           }
         } catch(e) {}
       })();
-      document.getElementById('lastTs').textContent   = 'Switching...';
 
-      // ── Signal cards — rebuild to scanning / neutral state ─────────────
-      const sigRow = document.getElementById('signalsRow');
-      sigRow.innerHTML = '';
-      buildSignalCards();
-
-      // ── Decision panel ─────────────────────────────────────────────────
-      updateDecision({
-        direction: 'FLAT', confidence: 0, size_pct: 0,
-        entry_price: 0, stop_loss: 0, take_profit: 0,
-        reasoning: `Switched to ${data.symbol.replace('USDT', '/USDT')} — waiting for first cycle...`,
-        risk_note: '',
-      });
-
-      // ── Execution bar ──────────────────────────────────────────────────
-      document.getElementById('execAction').textContent    = 'IDLE';
-      document.getElementById('execAction').className      = 'exec-bar-action off';
-      document.getElementById('execDot').className         = 'exec-bar-dot off';
-      document.getElementById('execDetailNormal').textContent = 'Waiting for first agent cycle...';
-      document.getElementById('execBadge').textContent     = '—';
-      document.getElementById('cooldownWrap').style.display = 'none';
-
-      // ── Agent log ──────────────────────────────────────────────────────
-      _knownTs.clear();
-      document.getElementById('logList').innerHTML =
-        `<div class="log-empty"><span>Switched to ${data.symbol.replace('USDT','/USDT')}</span><span style="color:var(--txt3)">Next cycle in ~60s</span></div>`;
-
-      // ── Ticker — show new symbol with empty values ─────────────────────
       buildTicker({ symbol: data.symbol, price: 0, cycle: 0, sim_pnl: 0, signals: {}, decision: {} });
       return;
     }
@@ -2372,8 +2500,17 @@ function connect() {
 function handleUpdate(data) {
   document.getElementById('overlay').classList.add('hide');
 
-  // Discard stale updates from a previous symbol cycle
-  if (data.symbol && _currentSymbol && data.symbol !== _currentSymbol) return;
+  // Discard stale updates from a previous symbol — critical race-condition guard
+  if (data.symbol && _currentSymbol && data.symbol !== _currentSymbol) {
+    console.log('Discarding stale update for', data.symbol, '(current:', _currentSymbol + ')');
+    return;
+  }
+
+  // First matching update after a symbol switch — clear the switching flag
+  if (_isSwitching) {
+    _isSwitching = false;
+    clearTimeout(_switchTimeout);
+  }
 
   // Header stats
   const priceEl = document.getElementById('hdrPrice');
@@ -2797,7 +2934,7 @@ async function confirmClosePosition() {
 // ══════════════════════════════════════════════════════
 function populateMSettings() {
   const connected = !!(_initPayload && _initPayload.creds_set);
-  const sym = document.getElementById('symbolVal')?.textContent || '—';
+  const displaySym = formatSymbol(_currentSymbol);
 
   const dot  = document.getElementById('mStatusDot');
   const txt  = document.getElementById('mStatusTxt');
@@ -2806,7 +2943,7 @@ function populateMSettings() {
 
   if (dot)    { dot.className = 'm-status-dot ' + (connected ? 'live' : 'off'); }
   if (txt)    txt.textContent = connected ? 'Connected' : 'Not connected';
-  if (symEl)  symEl.textContent = connected ? sym : '—';
+  if (symEl)  symEl.textContent = connected ? displaySym : '—';
   if (discBtn) discBtn.style.display = connected ? '' : 'none';
 
   const mode  = document.getElementById('footerMode')?.textContent || '—';
@@ -2817,15 +2954,17 @@ function populateMSettings() {
   const mBudgetInput = document.getElementById('mBudgetInput');
   if (mBudgetInput && bal > 0) mBudgetInput.placeholder = `Current: $${bal.toFixed(0)}`;
 
-  buildMSymGrid(sym);
+  // Pass the raw symbol string (e.g. "BTCUSDT"), not the formatted display
+  buildMSymGrid(_currentSymbol);
 }
 
 function buildMSymGrid(activeSym) {
+  // activeSym must be the raw symbol string e.g. "BTCUSDT", not the display string
   const grid = document.getElementById('mSymGrid');
   if (!grid) return;
   const top12 = _PAIRS.slice(0, 12);
   grid.innerHTML = top12.map(([s, b]) =>
-    `<button class="m-sym-pill${s === activeSym + 'USDT' || b === activeSym ? ' active' : ''}"
+    `<button class="m-sym-pill${s === activeSym ? ' active' : ''}"
       onclick="mSwitchSymbol('${s}')">${b}</button>`
   ).join('');
 }
