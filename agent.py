@@ -23,10 +23,10 @@ PRODUCT        = "USDT-FUTURES"
 LOOP_SECS      = 60
 MIN_CONFIDENCE = 60
 MAX_SIZE_PCT   = 3.0
-LOG_FILE       = "agent_log.jsonl"
 
-DATA_DIR       = Path("data")
+DATA_DIR       = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
+LOG_FILE       = DATA_DIR / "agent_log.jsonl"
 POSITION_FILE  = DATA_DIR / "position.json"
 TRADES_DB      = DATA_DIR / "trades.db"
 
@@ -43,13 +43,15 @@ MIN_LOT_SIZES = {
 
 def set_credentials(api_key: str, secret_key: str, passphrase: str):
     global BITGET_API_KEY, BITGET_SECRET_KEY, BITGET_PASSPHRASE
-    global _balance_working_path, _balance_diagnosed, _balance_retry_ts, _is_unified_account
+    global _balance_working_path, _balance_diagnosed, _balance_retry_ts
+    global _balance_fail_count, _is_unified_account
     BITGET_API_KEY    = api_key
     BITGET_SECRET_KEY = secret_key
     BITGET_PASSPHRASE = passphrase
     _balance_working_path = None
     _balance_diagnosed    = False
     _balance_retry_ts     = 0.0
+    _balance_fail_count   = 0
     _is_unified_account   = None
 
 
@@ -230,6 +232,7 @@ _BALANCE_CANDIDATES = [
 _balance_working_path: str | None = None
 _balance_diagnosed: bool           = False
 _balance_retry_ts: float           = 0.0
+_balance_fail_count: int           = 0
 
 
 def _extract_usdt(data) -> float | None:
@@ -259,7 +262,7 @@ def _extract_usdt(data) -> float | None:
 
 
 def get_futures_balance() -> float:
-    global _balance_working_path, _balance_diagnosed, _balance_retry_ts
+    global _balance_working_path, _balance_diagnosed, _balance_retry_ts, _balance_fail_count
 
     def _resolve(api_val: float) -> float:
         return api_val if api_val > 0 else MANUAL_BALANCE
@@ -268,12 +271,15 @@ def get_futures_balance() -> float:
         try:
             r = _auth_get_raw(_balance_working_path)
             if r.get("code") == "00000":
+                _balance_fail_count = 0
                 return _resolve(_extract_usdt(r.get("data")) or 0.0)
         except Exception:
             _balance_working_path = None
 
+    # Only back off after 2 consecutive full-scan failures to avoid locking
+    # out on the very first connection attempt due to a transient error.
     now = time.time()
-    if _balance_retry_ts > 0 and now - _balance_retry_ts < 300:
+    if _balance_fail_count >= 2 and _balance_retry_ts > 0 and now - _balance_retry_ts < 300:
         return MANUAL_BALANCE
     _balance_retry_ts = now
 
@@ -287,6 +293,7 @@ def get_futures_balance() -> float:
                     print(f"[balance] {path} -> ${v:.2f}")
                     _balance_working_path = path
                     _balance_diagnosed    = True
+                    _balance_fail_count   = 0
                     return _resolve(v)
             elif not _balance_diagnosed:
                 print(f"[balance] {path} -> {code} {r.get('msg', '')}")
@@ -294,6 +301,7 @@ def get_futures_balance() -> float:
             if not _balance_diagnosed:
                 print(f"[balance] {path} -> {ex}")
 
+    _balance_fail_count += 1
     if not _balance_diagnosed:
         suffix = f" — using manual budget ${MANUAL_BALANCE:.2f}" if MANUAL_BALANCE else ""
         print(f"[balance] no working endpoint found{suffix}")
@@ -342,8 +350,12 @@ def _get_position_v3() -> dict | None:
         r = _auth_get_raw("/api/v3/position/current-position",
                           {"category": PRODUCT, "symbol": SYMBOL})
         if r.get("code") != "00000":
+            print(f"[position] v3 -> {r.get('code')} {r.get('msg', '')}")
             return None
-        for p in (r.get("data") or {}).get("list") or []:
+        data = r.get("data") or {}
+        # Bitget v3 may return data as a list directly or as {"list": [...]}
+        positions = data if isinstance(data, list) else (data.get("list") or [])
+        for p in positions:
             if p.get("symbol", "").upper() == SYMBOL and float(p.get("total", 0)) > 0:
                 norm = {
                     "holdSide":   p.get("posSide", "").lower(),
@@ -493,6 +505,9 @@ def execute_trade(decision: dict, signals: dict) -> dict:
         )
         if r.get("code") == "00000":
             _set_local_position(None)
+        else:
+            result["detail"] = r.get("msg", f"flip-close failed ({r.get('code')})")
+            return result
 
     balance = get_futures_balance()
     if balance < 3.0:
@@ -809,7 +824,11 @@ def reason_with_qwen(signals: dict) -> dict:
     raw = resp.choices[0].message.content.strip()
     if "```" in raw:
         raw = raw.split("```")[1].replace("json", "").strip()
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[qwen] JSON parse error ({e}) — falling back to rule-based. Raw: {raw[:200]}")
+        return _rule_based_decision(signals)
 
 
 def _rule_based_decision(signals: dict) -> dict:
@@ -842,6 +861,7 @@ def _rule_based_decision(signals: dict) -> dict:
 
 # ─── RISK MANAGEMENT ──────────────────────────────────────────────────────────
 def apply_risk_rules(decision: dict) -> dict:
+    decision = dict(decision)
     if decision["confidence"] < MIN_CONFIDENCE:
         decision["direction"] = "FLAT"
         decision["risk_note"] = (
@@ -854,14 +874,24 @@ def apply_risk_rules(decision: dict) -> dict:
 
 
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
+_LOG_MAX_BYTES = 10_000_000  # 10 MB — keep last 500 entries on rotation
+
+
 def save_log(cycle: int, signals: dict, decision: dict):
-    with open(LOG_FILE, "a") as f:
-        f.write(json.dumps({
-            "cycle":    cycle,
-            "ts":       datetime.now(timezone.utc).isoformat(),
-            "signals":  signals,
-            "decision": decision,
-        }) + "\n")
+    entry = json.dumps({
+        "cycle":    cycle,
+        "ts":       datetime.now(timezone.utc).isoformat(),
+        "signals":  signals,
+        "decision": decision,
+    }) + "\n"
+    try:
+        if LOG_FILE.exists() and LOG_FILE.stat().st_size > _LOG_MAX_BYTES:
+            lines = LOG_FILE.read_text(encoding="utf-8").splitlines(keepends=True)
+            LOG_FILE.write_text("".join(lines[-500:]), encoding="utf-8")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(entry)
+    except Exception as e:
+        print(f"[log] {e}")
 
 
 # ─── STANDALONE ENTRY POINT ───────────────────────────────────────────────────

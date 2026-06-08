@@ -104,14 +104,15 @@ async def agent_loop():
             # Run all 6 signals in parallel inside a thread pool.
             # requests.get() is blocking — running it in threads keeps the event loop
             # free so WebSocket pings and reconnects are never starved.
-            sig_results = await asyncio.gather(
+            # Outer timeout guards against a thread hanging beyond its individual timeout.
+            sig_results = await asyncio.wait_for(asyncio.gather(
                 loop.run_in_executor(_executor, _safe_signal, "technical",  get_technical_signal),
                 loop.run_in_executor(_executor, _safe_signal, "sentiment",  get_sentiment_signal),
                 loop.run_in_executor(_executor, _safe_signal, "macro",      get_macro_signal),
                 loop.run_in_executor(_executor, _safe_signal, "momentum",   get_momentum_signal),
                 loop.run_in_executor(_executor, _safe_signal, "depth",      get_depth_signal),
                 loop.run_in_executor(_executor, _safe_signal, "volatility", get_volatility_signal),
-            )
+            ), timeout=45.0)
             signals = dict(zip(
                 ("technical", "sentiment", "macro", "momentum", "depth", "volatility"),
                 sig_results,
@@ -316,7 +317,9 @@ async def ws_route(ws: WebSocket):
     try:
         while True:
             try:
-                await asyncio.wait_for(ws.receive_text(), timeout=30)
+                msg = await asyncio.wait_for(ws.receive(), timeout=30)
+                if msg.get("type") == "websocket.disconnect":
+                    raise WebSocketDisconnect()
             except asyncio.TimeoutError:
                 await ws.send_text(json.dumps({"type": "ping"}))
     except WebSocketDisconnect:
