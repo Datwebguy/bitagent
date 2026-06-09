@@ -181,12 +181,16 @@ async def agent_loop():
                 await asyncio.sleep(LOOP_SECS * 2)
                 continue
 
-        # Sleep LOOP_SECS, but wake immediately if a symbol switch fires
+        # Sleep LOOP_SECS, but wake immediately if a symbol switch fires.
+        # IMPORTANT: check is_set() BEFORE clearing — a switch that fires during
+        # the active cycle sets the event; clearing first would lose that signal
+        # and force a full 60s sleep before the new symbol's cycle starts.
+        if not _wake_loop.is_set():
+            try:
+                await asyncio.wait_for(_wake_loop.wait(), timeout=LOOP_SECS)
+            except asyncio.TimeoutError:
+                pass
         _wake_loop.clear()
-        try:
-            await asyncio.wait_for(_wake_loop.wait(), timeout=LOOP_SECS)
-        except asyncio.TimeoutError:
-            pass
 
 
 # ─── ROUTES ───────────────────────────────────────────────────────────────────

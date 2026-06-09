@@ -1872,8 +1872,7 @@ function updateSignalCard(k, data) {
 // TICKER TAPE
 // ══════════════════════════════════════════════════════
 function buildTicker(data) {
-  if (data.symbol) _currentSymbol = data.symbol;
-  const base  = _currentSymbol.replace('USDT', '');
+  const base  = (data.symbol || _currentSymbol).replace('USDT', '');
   const pair  = `${base}/USDT`;
   const items = [
     [pair,         `$${fmt(data.price)}`,   'teal'],
@@ -2484,6 +2483,17 @@ function connect() {
 
     if (data.type === 'balance_update') {
       updateBalance(data.balance);
+      return;
+    }
+
+    if (data.type === 'error') {
+      // Cycle failed — show in exec bar so user knows why it's taking long
+      const action = document.getElementById('execAction');
+      const det    = document.getElementById('execDetailNormal');
+      if (action) { action.textContent = 'ERROR'; action.className = 'exec-bar-action bear'; }
+      if (det)    det.textContent = (data.msg || 'Signal fetch failed') + ' — retrying...';
+      const lastTs = document.getElementById('lastTs');
+      if (lastTs && _isSwitching) lastTs.textContent = 'Retrying...';
       return;
     }
 
