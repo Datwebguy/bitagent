@@ -15,7 +15,7 @@ import agent
 from agent import (
     get_technical_signal, get_sentiment_signal, get_momentum_signal,
     get_depth_signal, get_volatility_signal, get_macro_signal, reason_with_qwen,
-    apply_risk_rules, execute_trade, save_log,
+    apply_risk_rules, execute_trade, close_open_position, save_log,
     set_credentials, credentials_set, set_symbol, set_manual_balance,
     get_futures_balance, get_open_position, get_trade_history,
     LOOP_SECS, EXEC_COOLDOWN, MAX_DAILY_TRADES, EXEC_MAX_PCT,
@@ -327,6 +327,20 @@ def ticker(symbol: str):
 @app.get("/api/position")
 def position():
     return JSONResponse(get_open_position() or {})
+
+
+@app.post("/api/close-position")
+async def close_position_route():
+    if not credentials_set():
+        return {"ok": False, "error": "Not connected"}
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, close_open_position)
+    if result["executed"]:
+        pos = await loop.run_in_executor(None, get_open_position)
+        await _broadcast({"type": "update", "symbol": agent.SYMBOL,
+                          "position": pos, "execution": result})
+    return {"ok": result["executed"], "detail": result["detail"],
+            "error": None if result["executed"] else result["detail"]}
 
 
 @app.websocket("/ws")

@@ -1091,7 +1091,7 @@ footer .sep{color:var(--border2)}
         <span class="brand-name">BITAGENT</span>
         <span class="brand-sub">Autonomous AI Trading System</span>
       </div>
-      <div class="live-pill"><span class="live-dot"></span>LIVE</div>
+      <div class="live-pill" style="display:none"><span class="live-dot"></span>LIVE</div>
     </div>
     <div class="hdr-right">
       <div class="symbol-wrap">
@@ -1156,9 +1156,9 @@ footer .sep{color:var(--border2)}
                 fill="none" stroke="#00D4AA" stroke-width="13" stroke-linecap="round"
                 stroke-dasharray="353.4" stroke-dashoffset="353.4"
                 style="transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1),stroke .5s"/>
-              <!-- Dot at the tip of the progress arc -->
+              <!-- Dot at the tip of the progress arc — cx/cy animated by JS -->
               <circle id="gaugeDot" cx="47" cy="153" r="5" fill="#00D4AA" opacity="0"
-                style="transition:opacity .5s"/>
+                style="transition:opacity .5s,cx 1.2s cubic-bezier(.4,0,.2,1),cy 1.2s cubic-bezier(.4,0,.2,1)"/>
               <!-- Center text -->
               <text x="100" y="107" class="gauge-pct" id="gaugePct" text-anchor="middle">—</text>
               <text x="100" y="126" class="gauge-lbl" text-anchor="middle">CONFIDENCE</text>
@@ -1338,12 +1338,12 @@ footer .sep{color:var(--border2)}
       <span class="settings-section-label">Risk Parameters</span>
       <div class="m-risk-card">
         <div class="m-risk-row">
-          <span class="m-risk-key">Leverage</span>
-          <span class="m-risk-val" id="mRiskLev">5×</span>
+          <span class="m-risk-key">Limits</span>
+          <span class="m-risk-val" id="mRiskLev" style="font-size:10px">—</span>
         </div>
         <div class="m-risk-row">
-          <span class="m-risk-key">Risk per Trade</span>
-          <span class="m-risk-val" id="mRiskPct">2%</span>
+          <span class="m-risk-key">Max Size</span>
+          <span class="m-risk-val" id="mRiskPct">—</span>
         </div>
         <div class="m-risk-row">
           <span class="m-risk-key">Mode</span>
@@ -1666,6 +1666,7 @@ function skipIntro() {
   setTimeout(() => {
     if (_initPayload && _initPayload.creds_set) {
       hideConnectScreen();
+      document.querySelector('.live-pill')?.style.setProperty('display','');
       if (_initPayload.latest) handleUpdate(_initPayload.latest);
     } else {
       showConnectScreen();
@@ -1849,10 +1850,9 @@ const SIG_KEYS = Object.keys(SIG_META);
 
 function buildSignalCards() {
   const row = document.getElementById('signalsRow');
-  SIG_KEYS.forEach(k => {
+  row.innerHTML = SIG_KEYS.map(k => {
     const m = SIG_META[k];
-    row.innerHTML += `
-    <div class="sig-card neutral" id="sc-${k}">
+    return `<div class="sig-card neutral" id="sc-${k}">
       <div class="scanning"></div>
       <div class="sig-top">
         <span class="sig-name">${m.icon} ${m.label}</span>
@@ -1862,7 +1862,7 @@ function buildSignalCards() {
       <div class="sig-metrics" id="sm-${k}"></div>
       <div class="sig-bar-wrap"><div class="sig-bar neutral" id="sbar-${k}"></div></div>
     </div>`;
-  });
+  }).join('');
 }
 buildSignalCards();
 
@@ -2001,7 +2001,15 @@ function updateDecision(d) {
   arc.style.strokeDashoffset  = offset;
   arc.style.stroke             = arcColor;
   if (glow) { glow.style.strokeDashoffset = offset; glow.style.stroke = arcColor; }
-  if (dot)  { dot.style.opacity = pct > 0 ? '1' : '0'; dot.style.fill = arcColor; }
+  if (dot) {
+    // Arc: center(100,100) r=75, starts at 135° clockwise, spans 270°
+    // Tip angle = 135° + (pct/100)*270°
+    const tipAngle = (135 + pct * 2.7) * Math.PI / 180;
+    dot.setAttribute('cx', (100 + 75 * Math.cos(tipAngle)).toFixed(2));
+    dot.setAttribute('cy', (100 + 75 * Math.sin(tipAngle)).toFixed(2));
+    dot.style.opacity = pct > 0 ? '1' : '0';
+    dot.style.fill    = arcColor;
+  }
   gPct.textContent = pct === 0 ? '—' : pct + '%';
 
   // Params — only show SL/TP/Entry when there is an active directional signal
@@ -2044,9 +2052,12 @@ function updateExecution(exec) {
   const isCooldown = detail.includes('cooldown');
 
   if (exec.executed) {
+    const a = (exec.action || '').toUpperCase();
+    const isBear = a.includes('SHORT');
+    const isClose = a.includes('CLOSE');
     dot.className      = 'exec-bar-dot on';
-    action.className   = 'exec-bar-action on';
-    action.textContent = exec.action || 'EXECUTED';
+    action.className   = isBear ? 'exec-bar-action bear' : isClose ? 'exec-bar-action off' : 'exec-bar-action on';
+    action.textContent = a || 'EXECUTED';
     bar.classList.remove('fired');
     void bar.offsetWidth;
     bar.classList.add('fired');
@@ -2156,7 +2167,10 @@ async function doConnect() {
     if (data.ok) {
       _manualBudget = budget;
       hideConnectScreen();
+      document.querySelector('.live-pill')?.style.setProperty('display','');
       if (data.balance != null) updateBalance(data.balance);
+      if (data.position !== undefined) updatePosition(data.position);
+      syncMobileMetrics();
       const bal = data.balance ? `$${data.balance.toFixed(2)} USDT available` : (budget ? `$${budget.toFixed(2)} USDT budget` : '');
       if (bal) document.getElementById('execDetail').textContent = bal;
     } else {
@@ -2177,6 +2191,13 @@ async function doDisconnect() {
   if (!confirm('Disconnect account? The agent will stop trading.')) return;
   await fetch('/api/disconnect', {method: 'POST'});
   _manualBudget = 0;
+  document.querySelector('.live-pill')?.style.setProperty('display','none');
+  // Clear live header values
+  const hdrB = document.getElementById('hdrBalance');
+  if (hdrB) { hdrB.textContent = '$—'; hdrB.style.color = ''; }
+  const hdrP = document.getElementById('hdrPrice');
+  if (hdrP) hdrP.textContent = '$—';
+  updatePosition(null);
   showConnectScreen();
   document.getElementById('inputApiKey').value = '';
   document.getElementById('inputSecretKey').value = '';
@@ -2314,7 +2335,7 @@ function clearAllDisplayValues() {
   const glow = document.getElementById('gaugeGlow');
   if (glow) { glow.style.strokeDashoffset = GAUGE_LEN; glow.style.stroke = '#1A2030'; }
   const dot = document.getElementById('gaugeDot');
-  if (dot) dot.style.opacity = '0';
+  if (dot) { dot.style.opacity = '0'; dot.setAttribute('cx','47'); dot.setAttribute('cy','153'); }
   const gPct = document.getElementById('gaugePct');
   if (gPct) gPct.textContent = '—';
 
@@ -2508,6 +2529,7 @@ function connect() {
       if (_introSkipped) {
         if (data.creds_set) {
           hideConnectScreen();
+          document.querySelector('.live-pill')?.style.setProperty('display','');
           if (data.latest) handleUpdate(data.latest);
         } else {
           showConnectScreen();
@@ -2528,6 +2550,7 @@ function connect() {
 
     if (data.type === 'connected') {
       hideConnectScreen();
+      document.querySelector('.live-pill')?.style.setProperty('display','');
       if (data.symbol) {
         _currentSymbol = data.symbol;
         updateSymbolLabels(data.symbol);
@@ -2535,9 +2558,11 @@ function connect() {
       }
       if (data.balance != null) updateBalance(data.balance);
       if ('position' in data)   updatePosition(data.position);
+      syncMobileMetrics();
       return;
     }
     if (data.type === 'disconnected') {
+      document.querySelector('.live-pill')?.style.setProperty('display','none');
       showConnectScreen();
       return;
     }
@@ -2612,6 +2637,9 @@ function handleUpdate(data) {
     clearTimeout(_switchTimeout);
   }
 
+  // Sync server uptime so page refreshes don't reset to 00:00
+  if (data.uptime != null) _uptimeSec = data.uptime;
+
   // Header stats
   const priceEl = document.getElementById('hdrPrice');
   if (data.price && data.price > 0) {
@@ -2660,6 +2688,15 @@ function handleUpdate(data) {
 
   // Ticker
   buildTicker(data);
+
+  // Settings panel risk config
+  if (data.risk_config) {
+    const rc = data.risk_config;
+    const pct = document.getElementById('mRiskPct');
+    if (pct) pct.textContent = rc.size_pct + '%';
+    const cd  = document.getElementById('mRiskLev');
+    if (cd)  cd.textContent  = `${rc.max_daily} trades/day · ${rc.cooldown_secs}s cooldown`;
+  }
 }
 
 connect();
@@ -2696,7 +2733,19 @@ setInterval(() => {
 // ══════════════════════════════════════════════════════
 function fmt(n) {
   if (n == null || isNaN(n)) return '—';
-  return Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const num = Number(n);
+  if (!isFinite(num)) return '—';
+  const abs = Math.abs(num);
+  const dp = abs === 0        ? 2
+           : abs >= 1000      ? 2
+           : abs >= 10        ? 3
+           : abs >= 1         ? 4
+           : abs >= 0.1       ? 5
+           : abs >= 0.01      ? 6
+           : abs >= 0.001     ? 7
+           : abs >= 0.00001   ? 8
+           :                    10;
+  return num.toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp});
 }
 
 function setEl(id, txt) {
@@ -3155,7 +3204,7 @@ rebuildConnectSelect();
   <div style="font-size:11px;color:var(--txt3);margin-bottom:8px">Set trade budget (USDT)</div>
   <div style="display:flex;gap:6px">
     <input id="budgetInput" type="number" min="0" step="1" placeholder="e.g. 100"
-      style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--txt1);border-radius:6px;padding:6px 10px;font-size:13px;outline:none">
+      style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:6px;padding:6px 10px;font-size:13px;outline:none">
     <button onclick="applyBudget()" style="background:var(--teal);color:#000;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">Set</button>
   </div>
   <div style="font-size:10px;color:var(--txt3);margin-top:6px">Used when exchange balance is $0 (e.g. Unified Account)</div>

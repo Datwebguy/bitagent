@@ -579,6 +579,44 @@ def execute_trade(decision: dict, signals: dict) -> dict:
     return result
 
 
+def close_open_position() -> dict:
+    """Manually close the current open position (called from REST endpoint)."""
+    result = {"executed": False, "action": "SKIP", "detail": ""}
+    try:
+        pos = get_open_position()
+        if not pos or not pos.get("holdSide"):
+            result["detail"] = "no open position"
+            return result
+
+        curr_side  = pos.get("holdSide", "").lower()
+        close_side = "sell" if curr_side == "long" else "buy"
+        size       = str(pos.get("available") or pos.get("total") or "0")
+
+        # Best-effort price for the trade log
+        price = 0.0
+        try:
+            price = float(public_get(
+                "/api/v2/mix/market/ticker",
+                {"symbol": SYMBOL, "productType": PRODUCT},
+            )[0].get("lastPr", 0) or 0)
+        except Exception:
+            pass
+
+        r = place_order(close_side, "close", size)
+        if r.get("code") == "00000":
+            _set_local_position(None)
+            _log_trade("CLOSE", curr_side, float(size), price,
+                       r.get("data", {}).get("orderId", ""), 0, 0,
+                       f"manual close: {curr_side} {size}")
+            result.update({"executed": True, "action": "CLOSE",
+                           "detail": f"closed {curr_side} {size}"})
+        else:
+            result["detail"] = r.get("msg", f"close failed ({r.get('code', '?')})")
+    except Exception as e:
+        result["detail"] = str(e)
+    return result
+
+
 # ─── SIGNALS ──────────────────────────────────────────────────────────────────
 def get_technical_signal() -> dict:
     _neutral = {"signal": "NEUTRAL", "rsi": 50, "stoch_rsi": 50,
