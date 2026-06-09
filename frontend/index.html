@@ -188,7 +188,7 @@ header{
 
 /* ── SIGNALS ROW ─────────────────────────────────────── */
 .signals-row{
-  display:grid;grid-template-columns:repeat(6,1fr);
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
   gap:10px;padding:10px 24px;
   border-bottom:1px solid var(--border);
 }
@@ -1559,6 +1559,33 @@ footer .sep{color:var(--border2)}
    FIX 8 — buildMSymGrid() now receives raw "BTCUSDT" symbol,
             not the formatted display string — active pill was
             always wrong before this fix.
+   ════════════════════════════════════════════════════════
+   BUG INVESTIGATION ANSWERS (2026-06-09):
+   Q1. 'update' WS message fields: type, cycle, ts, symbol,
+       signals, decision, execution, price, balance, position,
+       sim_pnl, uptime, history, risk_config
+   Q2. Does 'update' include 'symbol'? YES — "symbol": sym
+       (server.py agent_loop, line ~155, captured before cycle)
+   Q3. Frontend current-symbol variable: _currentSymbol
+   Q4. 'symbol_changed' fields: {type:"symbol_changed",symbol}
+   Q5. Signal cards wrapper: class=".signals-row", id="signalsRow"
+   ----
+   ROOT CAUSE of "SWITCHING forever":
+   init handler used `data.latest?.symbol || data.symbol`.
+   If WS reconnects mid-switch, _latest still holds the LAST
+   completed BTC cycle data → data.latest.symbol='BTCUSDT'
+   overrides data.symbol='XRPUSDT', reverting _currentSymbol
+   to BTC. Every subsequent XRP update is then discarded by
+   the stale guard. Fix: flip precedence → data.symbol first.
+   ----
+   TICKER BUG FIX: clearAllDisplayValues() now calls buildTicker
+   immediately so the ticker clears the moment the user taps a
+   new symbol, not after the WS round-trip for symbol_changed.
+   ----
+   OVERFLOW BUG FIX: .signals-row changed from repeat(6,1fr)
+   to repeat(auto-fit,minmax(160px,1fr)) so all 6 cards fit
+   without overflow on 1366px screens. Medium-screen breakpoint
+   (768-1280px) still forces 3-column layout via @media query.
    ════════════════════════════════════════════════════════ */
 
 // ══════════════════════════════════════════════════════
@@ -2266,6 +2293,11 @@ function clearAllDisplayValues() {
     clearInterval(_cooldownTimer); _cooldownTimer = null;
   }
 
+  // Ticker tape — reset to new symbol immediately so stale BTC data is never
+  // visible after a switch. buildTicker uses _currentSymbol which is already
+  // updated by the time clearAllDisplayValues() is called.
+  buildTicker({ symbol: _currentSymbol, price: 0, cycle: 0, sim_pnl: 0, signals: {}, decision: {} });
+
   // Agent log
   _knownTs.clear();
   const logList = document.getElementById('logList');
@@ -2428,9 +2460,11 @@ function connect() {
           showConnectScreen();
         }
       }
-      // Sync symbol: prefer latest.symbol, fallback to data.symbol (always present even
-      // on fresh restart when latest is empty — prevents stale guard from discarding updates)
-      const initSym = data.latest?.symbol || data.symbol;
+      // Sync symbol: prefer data.symbol (= agent.SYMBOL, always authoritative) over
+      // data.latest.symbol which may be from the last completed cycle and could be a
+      // stale old symbol if the WS reconnects mid-switch. Reversing this precedence was
+      // the root cause of "SWITCHING forever" after a WS reconnect during a symbol switch.
+      const initSym = data.symbol || data.latest?.symbol;
       if (initSym) {
         _currentSymbol = initSym;
         updateSymbolLabels(initSym);
@@ -2512,8 +2546,9 @@ function connect() {
 function handleUpdate(data) {
   document.getElementById('overlay').classList.add('hide');
 
-  // Discard stale updates from a previous symbol — critical race-condition guard
-  if (data.symbol && _currentSymbol && data.symbol !== _currentSymbol) {
+  // Discard stale updates from a previous symbol — only if symbol field is present AND wrong.
+  // Do NOT require _currentSymbol to be truthy: if it's somehow empty, let updates through.
+  if (data.symbol && data.symbol !== _currentSymbol) {
     console.log('Discarding stale update for', data.symbol, '(current:', _currentSymbol + ')');
     return;
   }
