@@ -1889,7 +1889,7 @@ function buildTicker(data) {
     ['Confidence', `${data.decision?.confidence ?? '—'}%`, ''],
     ['RSI',        `${data.signals?.technical?.rsi ?? '—'}`, ''],
     ['ATR',        `${data.signals?.volatility?.atr_pct ?? '—'}%`, ''],
-    ['Bitget AI',  'Hackathon S1', 'teal'],
+    ['Exchange',   'Bitget Futures', 'teal'],
   ];
   const html = items.map(([l,v,c]) =>
     `<span class="t-item"><span class="lbl">${l}</span><span class="val ${c}">${v}</span></span>`
