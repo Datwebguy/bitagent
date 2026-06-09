@@ -317,7 +317,7 @@ def ticker(symbol: str):
             "/api/v2/mix/market/ticker",
             {"symbol": symbol.upper(), "productType": "USDT-FUTURES"},
         )
-        price = float(data["data"][0]["lastPr"])
+        price = float(data[0]["lastPr"])  # public_get already unwraps .data → list
         return {"price": price}
     except Exception as e:
         print(f"[ticker] {e}")
@@ -336,6 +336,7 @@ async def ws_route(ws: WebSocket):
     await ws.send_text(json.dumps({
         "type":      "init",
         "creds_set": credentials_set(),
+        "symbol":    agent.SYMBOL,          # always send current symbol so frontend can sync
         "latest":    _latest if _latest else None,
     }))
     try:

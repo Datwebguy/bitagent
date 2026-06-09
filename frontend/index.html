@@ -2428,11 +2428,13 @@ function connect() {
           showConnectScreen();
         }
       }
-      // Always pre-set symbol if known
-      if (data.latest?.symbol) {
-        _currentSymbol = data.latest.symbol;
-        updateSymbolLabels(data.latest.symbol);
-        rebuildSymbolDrop(data.latest.symbol);
+      // Sync symbol: prefer latest.symbol, fallback to data.symbol (always present even
+      // on fresh restart when latest is empty — prevents stale guard from discarding updates)
+      const initSym = data.latest?.symbol || data.symbol;
+      if (initSym) {
+        _currentSymbol = initSym;
+        updateSymbolLabels(initSym);
+        rebuildSymbolDrop(initSym);
       }
       return;
     }
