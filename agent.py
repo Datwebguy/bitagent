@@ -1,4 +1,4 @@
-import os, json, time, hmac, hashlib, base64, sys, sqlite3
+import os, json, time, hmac, hashlib, base64, sys, sqlite3, re
 from datetime import datetime, timezone, date
 from pathlib import Path
 from urllib.parse import urlencode
@@ -29,11 +29,19 @@ DATA_DIR.mkdir(exist_ok=True)
 LOG_FILE       = DATA_DIR / "agent_log.jsonl"
 POSITION_FILE  = DATA_DIR / "position.json"
 TRADES_DB      = DATA_DIR / "trades.db"
+CREDENTIALS_DISABLED_FILE = DATA_DIR / "credentials_disabled.flag"
 
+if CREDENTIALS_DISABLED_FILE.exists():
+    BITGET_API_KEY = ""
+    BITGET_SECRET_KEY = ""
+    BITGET_PASSPHRASE = ""
+
+EXEC_MODE        = os.getenv("EXEC_MODE", "paper").strip().lower()
 EXEC_ENABLED     = os.getenv("EXEC_ENABLED", "true").lower() == "true"
 EXEC_MAX_PCT     = float(os.getenv("EXEC_MAX_PCT", "1.0"))
 EXEC_COOLDOWN    = int(os.getenv("EXEC_COOLDOWN", "300"))
 MAX_DAILY_TRADES = int(os.getenv("MAX_DAILY_TRADES", "10"))
+PAPER_BALANCE    = float(os.getenv("PAPER_BALANCE", "10000"))
 
 MIN_LOT_SIZES = {
     # Major
@@ -76,6 +84,8 @@ def set_credentials(api_key: str, secret_key: str, passphrase: str):
     BITGET_API_KEY    = api_key
     BITGET_SECRET_KEY = secret_key
     BITGET_PASSPHRASE = passphrase
+    if credentials_set() and CREDENTIALS_DISABLED_FILE.exists():
+        CREDENTIALS_DISABLED_FILE.unlink(missing_ok=True)
     _balance_working_path = None
     _balance_diagnosed    = False
     _balance_retry_ts     = 0.0
@@ -88,13 +98,35 @@ def set_manual_balance(usdt: float):
     MANUAL_BALANCE = float(usdt)
 
 
+def mark_credentials_disabled():
+    CREDENTIALS_DISABLED_FILE.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+
+
 def credentials_set() -> bool:
     return bool(BITGET_API_KEY and BITGET_SECRET_KEY and BITGET_PASSPHRASE)
 
 
+def execution_mode() -> str:
+    return "live" if EXEC_MODE == "live" else "paper"
+
+
+def is_paper_mode() -> bool:
+    return execution_mode() == "paper"
+
+
+_SYMBOL_RE = re.compile(r"^[A-Z0-9]{2,20}USDT$")
+
+
+def normalize_symbol(symbol: str) -> str:
+    sym = (symbol or "").strip().upper()
+    if not _SYMBOL_RE.fullmatch(sym):
+        raise ValueError("Invalid symbol. Use a USDT futures pair such as BTCUSDT.")
+    return sym
+
+
 def set_symbol(symbol: str):
     global SYMBOL
-    SYMBOL = symbol.upper()
+    SYMBOL = normalize_symbol(symbol)
 
 
 def _min_lot() -> float:
@@ -225,13 +257,120 @@ def get_trade_history(limit: int = 50) -> list:
         con  = sqlite3.connect(TRADES_DB)
         rows = con.execute(
             "SELECT ts,symbol,action,side,size,price,order_id,confidence,detail "
-            "FROM trades ORDER BY id DESC LIMIT ?",
-            (limit,),
+            "FROM trades ORDER BY id ASC",
         ).fetchall()
         con.close()
         keys = ["ts", "symbol", "action", "side", "size",
                 "price", "order_id", "confidence", "detail"]
-        return [dict(zip(keys, r)) for r in rows]
+        out = []
+        open_by_symbol = {}
+        for r in rows:
+            item = dict(zip(keys, r))
+            action = str(item.get("action") or "").upper()
+            symbol = item.get("symbol") or SYMBOL
+            side = str(item.get("side") or "").lower()
+            size = float(item.get("size") or 0)
+            price = float(item.get("price") or 0)
+            item["pnl"] = None
+            item["entry_price"] = None
+            item["exit_price"] = None
+            item["audit"] = "Executed paper/live fill" if "PAPER" not in action else "Executed paper fill"
+
+            if action.startswith("OPEN_"):
+                open_by_symbol[symbol] = {"side": side, "size": size, "price": price}
+                item["entry_price"] = price
+                item["audit"] = f"Opened {side or 'position'} after the decision passed execution rules."
+            elif action.startswith("CLOSE_"):
+                prev = open_by_symbol.get(symbol)
+                item["exit_price"] = price
+                if prev:
+                    item["entry_price"] = prev["price"]
+                    if prev["side"] == "long":
+                        item["pnl"] = round((price - prev["price"]) * prev["size"], 4)
+                    elif prev["side"] == "short":
+                        item["pnl"] = round((prev["price"] - price) * prev["size"], 4)
+                    item["audit"] = f"Closed {prev['side']} from ${prev['price']:,.4g} to ${price:,.4g}."
+                    open_by_symbol.pop(symbol, None)
+                else:
+                    item["audit"] = "Close fill recorded; matching open was not found in current journal window."
+            out.append(item)
+        return list(reversed(out))[:limit]
+    except Exception:
+        return []
+
+
+def get_paper_account(mark_price: float | None = None) -> dict:
+    initial = MANUAL_BALANCE if MANUAL_BALANCE > 0 else PAPER_BALANCE
+    realized = 0.0
+    pos_side = ""
+    pos_size = 0.0
+    pos_entry = 0.0
+
+    try:
+        con = sqlite3.connect(TRADES_DB)
+        rows = con.execute(
+            "SELECT action,side,size,price FROM trades "
+            "WHERE symbol = ? AND action LIKE '%_PAPER' ORDER BY id ASC",
+            (SYMBOL,),
+        ).fetchall()
+        con.close()
+    except Exception:
+        rows = []
+
+    for action, side, size, price in rows:
+        action = str(action or "").upper()
+        side = str(side or "").lower()
+        size = float(size or 0)
+        price = float(price or 0)
+        if size <= 0 or price <= 0:
+            continue
+        if action.startswith("OPEN_"):
+            pos_side, pos_size, pos_entry = side, size, price
+        elif action.startswith("CLOSE_") and pos_side and pos_size > 0:
+            if pos_side == "long":
+                realized += (price - pos_entry) * pos_size
+            elif pos_side == "short":
+                realized += (pos_entry - price) * pos_size
+            pos_side, pos_size, pos_entry = "", 0.0, 0.0
+
+    if mark_price is None:
+        try:
+            ticker = public_get(
+                "/api/v2/mix/market/ticker",
+                {"symbol": SYMBOL, "productType": PRODUCT},
+            )
+            mark_price = float(ticker[0].get("lastPr", 0) or 0)
+        except Exception:
+            mark_price = 0.0
+
+    unrealized = 0.0
+    if pos_side and pos_size > 0 and pos_entry > 0 and mark_price and mark_price > 0:
+        unrealized = (mark_price - pos_entry) * pos_size if pos_side == "long" else (pos_entry - mark_price) * pos_size
+
+    equity = initial + realized + unrealized
+    return {
+        "mode":       "paper",
+        "initial":    round(initial, 2),
+        "realized":   round(realized, 4),
+        "unrealized": round(unrealized, 4),
+        "equity":     round(equity, 2),
+        "open_side":  pos_side or "flat",
+        "open_size":  round(pos_size, 8),
+        "entry":      round(pos_entry, 8),
+        "mark":       round(float(mark_price or 0), 8),
+    }
+
+
+def get_decision_history(limit: int = 50) -> list:
+    try:
+        if not LOG_FILE.exists():
+            return []
+        lines = LOG_FILE.read_text(encoding="utf-8").splitlines()
+        out = []
+        for line in lines[-limit:]:
+            if line.strip():
+                out.append(json.loads(line))
+        return out
     except Exception:
         return []
 
@@ -263,8 +402,19 @@ _balance_retry_ts: float           = 0.0
 _balance_fail_count: int           = 0
 
 
+def _path_with_query(path: str, params: dict | None = None) -> str:
+    qs = urlencode(params or {})
+    return f"{path}?{qs}" if qs else path
+
+
 def _extract_usdt(data) -> float | None:
     if isinstance(data, dict):
+        for nested_key in ("assetsList", "coinAssets", "assets", "list"):
+            nested = data.get(nested_key)
+            if isinstance(nested, list):
+                v = _extract_usdt(nested)
+                if v is not None:
+                    return v
         coin = data.get("coin") or data.get("coinName") or ""
         if coin and coin.upper() not in ("USDT", ""):
             return None
@@ -282,7 +432,9 @@ def _extract_usdt(data) -> float | None:
         for item in data:
             coin = (item.get("coin") or item.get("currency") or "").upper()
             if coin in ("USDT", ""):
-                for field in ("available", "availableAmount", "crossMaxAvailable", "free"):
+                for field in ("available", "availableAmount", "crossMaxAvailable", "free",
+                              "equity", "usdtEquity", "availableBalance", "walletBalance",
+                              "totalAmount", "netAsset"):
                     v = item.get(field)
                     if v not in (None, "", "0", 0):
                         return float(v)
@@ -291,6 +443,9 @@ def _extract_usdt(data) -> float | None:
 
 def get_futures_balance() -> float:
     global _balance_working_path, _balance_diagnosed, _balance_retry_ts, _balance_fail_count
+
+    if is_paper_mode():
+        return get_paper_account().get("equity", PAPER_BALANCE)
 
     def _resolve(api_val: float) -> float:
         return api_val if api_val > 0 else MANUAL_BALANCE
@@ -319,7 +474,7 @@ def get_futures_balance() -> float:
                 v = _extract_usdt(r.get("data"))
                 if v is not None:
                     print(f"[balance] {path} -> ${v:.2f}")
-                    _balance_working_path = path
+                    _balance_working_path = _path_with_query(path, params)
                     _balance_diagnosed    = True
                     _balance_fail_count   = 0
                     return _resolve(v)
@@ -350,6 +505,37 @@ def _load_position_from_disk() -> dict | None:
     except Exception:
         pass
     return None
+
+
+def _recover_paper_position_from_journal() -> dict | None:
+    try:
+        con = sqlite3.connect(TRADES_DB)
+        row = con.execute(
+            "SELECT ts,action,side,size,price,order_id FROM trades "
+            "WHERE symbol = ? AND action LIKE '%_PAPER' "
+            "ORDER BY id DESC LIMIT 1",
+            (SYMBOL,),
+        ).fetchone()
+        con.close()
+        if not row:
+            return None
+        ts, action, side, size, price, order_id = row
+        if not str(action).startswith("OPEN_") or float(size or 0) <= 0:
+            return None
+        pos = {
+            "holdSide":   side,
+            "total":      str(size),
+            "available":  str(size),
+            "symbol":     SYMBOL,
+            "entryPrice": str(price or 0),
+            "orderId":    order_id or "paper",
+            "openedAt":   ts,
+        }
+        _save_position_to_disk(pos)
+        return pos
+    except Exception as e:
+        print(f"[position] paper recovery failed: {e}")
+        return None
 
 
 def _save_position_to_disk(pos: dict | None):
@@ -404,6 +590,9 @@ def _get_position_v3() -> dict | None:
 def get_open_position() -> dict | None:
     global _is_unified_account
 
+    if is_paper_mode():
+        return _load_position_from_disk() or _recover_paper_position_from_journal()
+
     if _is_unified_account is True:
         return _get_position_v3() or _load_position_from_disk()
 
@@ -440,6 +629,10 @@ def _price_dp(price: float) -> int:
     if price >= 1:    return 4
     if price >= 0.1:  return 5
     return 6
+
+
+def _round_price(price: float) -> float:
+    return round(float(price), _price_dp(float(price)))
 
 
 def place_order(side: str, trade_side: str, size: str,
@@ -492,20 +685,31 @@ def execute_trade(decision: dict, signals: dict) -> dict:
     if not EXEC_ENABLED:
         result["detail"] = "execution disabled"
         return result
-    if not BITGET_API_KEY:
+    if not is_paper_mode() and not BITGET_API_KEY:
         result["detail"] = "no API key"
         return result
 
     direction  = decision["direction"]
     confidence = decision["confidence"]
     price      = float(signals["technical"]["price"])
-    pos        = get_open_position()
+    if price <= 0:
+        result["detail"] = "market price unavailable"
+        return result
+    pos        = _load_position_from_disk() if is_paper_mode() else get_open_position()
     curr_side  = pos.get("holdSide", "").lower() if pos else ""
 
     if direction == "FLAT":
         if pos and curr_side:
-            close_side = "sell" if curr_side == "long" else "buy"
             size       = str(pos.get("available") or pos.get("total") or "0")
+            if is_paper_mode():
+                _set_local_position(None)
+                _log_trade("CLOSE_PAPER", curr_side, float(size), price,
+                           "paper", 0, confidence, f"paper close {curr_side} {size}")
+                result.update({"executed": True, "action": "CLOSE_PAPER",
+                               "detail": f"paper closed {curr_side} {size}"})
+                return result
+
+            close_side = "sell" if curr_side == "long" else "buy"
             r          = place_order(close_side, "close", size)
             if r.get("code") == "00000":
                 _set_local_position(None)
@@ -536,23 +740,56 @@ def execute_trade(decision: dict, signals: dict) -> dict:
         return result
 
     if pos and curr_side:
-        r = place_order(
-            "sell" if curr_side == "long" else "buy",
-            "close",
-            str(pos.get("available") or pos.get("total") or "0"),
-        )
-        if r.get("code") == "00000":
+        if is_paper_mode():
+            size = str(pos.get("available") or pos.get("total") or "0")
             _set_local_position(None)
+            _log_trade("CLOSE_PAPER", curr_side, float(size), price,
+                       "paper", 0, confidence, f"paper flip close {curr_side} {size}")
         else:
-            result["detail"] = r.get("msg", f"flip-close failed ({r.get('code')})")
-            return result
+            r = place_order(
+                "sell" if curr_side == "long" else "buy",
+                "close",
+                str(pos.get("available") or pos.get("total") or "0"),
+            )
+            if r.get("code") == "00000":
+                _set_local_position(None)
+            else:
+                result["detail"] = r.get("msg", f"flip-close failed ({r.get('code')})")
+                return result
 
     balance = get_futures_balance()
     if balance < 0.5:
         result["detail"] = f"insufficient balance (${balance:.2f} USDT)"
         return result
 
-    asset_size = max(_min_lot(), round(balance * (EXEC_MAX_PCT / 100.0) / price, 4))
+    budget_usdt = balance * (EXEC_MAX_PCT / 100.0)
+    min_lot = _min_lot()
+    min_lot_notional = min_lot * price
+    if budget_usdt < min_lot_notional:
+        result["detail"] = (
+            f"budget too small for min lot: need ~${min_lot_notional:.2f} "
+            f"for {min_lot:g} {SYMBOL.replace('USDT', '')}"
+        )
+        return result
+
+    asset_size = round(budget_usdt / price, 4)
+    if asset_size < min_lot:
+        asset_size = min_lot
+
+    if is_paper_mode():
+        _last_exec_ts = time.time()
+        _set_local_position(want_side, asset_size, price, "paper")
+        _log_trade(f"OPEN_{direction}_PAPER", want_side, asset_size, price,
+                   "paper", balance, confidence, f"paper {asset_size} @ ~${price:,.6g}")
+        result.update({
+            "executed": True,
+            "action":   f"OPEN_{direction}_PAPER",
+            "size":     asset_size,
+            "order_id": "paper",
+            "detail":   f"paper {asset_size} {SYMBOL.replace('USDT', '')} @ ~${price:,.6g}",
+        })
+        return result
+
     open_side  = "buy" if direction == "LONG" else "sell"
     r = place_order(open_side, "open", str(asset_size),
                     sl=decision.get("stop_loss"), tp=decision.get("take_profit"))
@@ -566,7 +803,7 @@ def execute_trade(decision: dict, signals: dict) -> dict:
         result.update({
             "executed": True,
             "action":   f"OPEN_{direction}",
-            "size_btc": asset_size,
+            "size":     asset_size,
             "order_id": order_id,
             "detail":   f"{asset_size} {SYMBOL.replace('USDT', '')} @ ~${price:,.0f} | {order_id}",
         })
@@ -583,13 +820,12 @@ def close_open_position() -> dict:
     """Manually close the current open position (called from REST endpoint)."""
     result = {"executed": False, "action": "SKIP", "detail": ""}
     try:
-        pos = get_open_position()
+        pos = _load_position_from_disk() if is_paper_mode() else get_open_position()
         if not pos or not pos.get("holdSide"):
             result["detail"] = "no open position"
             return result
 
         curr_side  = pos.get("holdSide", "").lower()
-        close_side = "sell" if curr_side == "long" else "buy"
         size       = str(pos.get("available") or pos.get("total") or "0")
 
         # Best-effort price for the trade log
@@ -602,6 +838,15 @@ def close_open_position() -> dict:
         except Exception:
             pass
 
+        if is_paper_mode():
+            _set_local_position(None)
+            _log_trade("CLOSE_PAPER", curr_side, float(size), price,
+                       "paper", 0, 0, f"manual paper close: {curr_side} {size}")
+            result.update({"executed": True, "action": "CLOSE_PAPER",
+                           "detail": f"paper closed {curr_side} {size}"})
+            return result
+
+        close_side = "sell" if curr_side == "long" else "buy"
         r = place_order(close_side, "close", size)
         if r.get("code") == "00000":
             _set_local_position(None)
@@ -669,9 +914,9 @@ def get_technical_signal() -> dict:
     return {
         "signal": signal, "rsi": rsi, "stoch_rsi": stoch_rsi,
         "trend": trend, "macd": macd_dir,
-        "price": round(price, 2), "sma20": round(float(sma20), 2),
+        "price": _round_price(price), "sma20": _round_price(sma20),
         "bb_pct": round(bb_pct, 3),
-        "bb_upper": round(bb_upper, 2), "bb_lower": round(bb_lower, 2),
+        "bb_upper": _round_price(bb_upper), "bb_lower": _round_price(bb_lower),
     }
 
 
@@ -925,9 +1170,9 @@ def _rule_based_decision(signals: dict) -> dict:
         "direction":    direction,
         "confidence":   confidence,
         "size_pct":     2.0,
-        "entry_price":  price,
-        "stop_loss":    round(price - dist if direction == "LONG" else price + dist, 2),
-        "take_profit":  round(price + dist * 2 if direction == "LONG" else price - dist * 2, 2),
+        "entry_price":  _round_price(price),
+        "stop_loss":    _round_price(price - dist if direction == "LONG" else price + dist),
+        "take_profit":  _round_price(price + dist * 2 if direction == "LONG" else price - dist * 2),
         "signal_votes": dict(zip(
             ("technical", "sentiment", "macro", "momentum", "depth", "volatility"), votes)),
         "reasoning":    f"Rule-based: {bulls} bullish, {bears} bearish signals out of 6.",
@@ -938,6 +1183,14 @@ def _rule_based_decision(signals: dict) -> dict:
 # ─── RISK MANAGEMENT ──────────────────────────────────────────────────────────
 def apply_risk_rules(decision: dict) -> dict:
     decision = dict(decision)
+    decision.setdefault("direction", "FLAT")
+    decision.setdefault("confidence", 0)
+    decision.setdefault("size_pct", 0)
+    decision["direction"] = str(decision["direction"]).upper()
+    decision["confidence"] = max(0, min(100, int(float(decision["confidence"] or 0))))
+    decision["size_pct"] = max(0.0, float(decision["size_pct"] or 0))
+    if decision["direction"] not in ("LONG", "SHORT", "FLAT"):
+        decision["direction"] = "FLAT"
     if decision["confidence"] < MIN_CONFIDENCE:
         decision["direction"] = "FLAT"
         decision["risk_note"] = (

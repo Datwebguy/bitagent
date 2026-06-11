@@ -1,8 +1,8 @@
-# BitAgent — Autonomous AI Trading Platform
+# BitAgent
 
-> Built for the **Bitget AI Base Camp Hackathon S1** (May 27 – June 25, 2026)
+BitAgent is an AI trading risk cockpit that perceives live market conditions across six signal dimensions, reasons over them with Qwen, and runs an execution loop with explicit risk controls. The public deployment defaults to paper trading for safe, verifiable evaluation; live Bitget futures execution is available only when deliberately enabled by an operator.
 
-BitAgent is a production-grade autonomous trading system that perceives live market conditions across six signal dimensions, reasons over them with an LLM, and executes real perpetual futures orders on Bitget — all with a professional real-time cockpit UI.
+BitAgent is not financial advice and does not guarantee profit. Paper mode uses simulated funds; live mode can lose real money.
 
 ---
 
@@ -15,7 +15,7 @@ Browser (WebSocket) ──► FastAPI Server ──► Bitget REST API
                               │
               ┌───────────────┼───────────────┐
           Signals          Reason           Execute
-        (6 sources)      (Qwen LLM)    (v2 / v3 API)
+        (6 sources)      (Qwen LLM)    (Paper / Bitget API)
 ```
 
 **Stack:** Python 3.11 · FastAPI · WebSocket · NumPy · SQLite · Single-file HTML frontend
@@ -43,6 +43,7 @@ Without a Qwen API key, the agent runs a transparent rule-based majority vote.
 With `QWEN_API_KEY` set, decisions are handed to `qwen3.6-plus` via the Bitget hackathon endpoint — the model receives all six signal payloads and returns a structured JSON decision including entry, stop-loss, take-profit, confidence, and reasoning.
 
 **Minimum confidence to trade:** 60%  
+**Mode:** paper by default; set `EXEC_MODE=live` only for controlled live trading  
 **Max trade size:** 1% of balance per cycle (configurable)  
 **Execution cooldown:** 300 seconds between trades  
 **Daily cap:** 10 trades per UTC day
@@ -65,9 +66,12 @@ The server auto-detects the account type on first connection and routes all subs
 - Hard stop-loss and take-profit on every order
 - Per-asset minimum lot size enforcement
 - Disk-persistent position tracking — survives server restarts
-- SQLite trade journal for full audit trail
+- SQLite trade journal for paper/live execution evidence
+- JSONL decision journal for every perception → decision cycle
 - Exponential backoff on API errors (up to 3 retries)
 - Automatic 5-minute back-off if the balance endpoint is unreachable
+
+Paper equity, realized P&L, and open P&L are tracked separately from decision logs. Decision logs show every agent cycle; trade history shows only executed paper/live fills.
 
 ---
 
@@ -80,6 +84,9 @@ export BITGET_API_KEY=your_key
 export BITGET_SECRET_KEY=your_secret
 export BITGET_PASSPHRASE=your_passphrase
 export QWEN_API_KEY=your_qwen_key   # optional — falls back to rule-based
+export EXEC_MODE=paper              # default; use live only with care
+export PAPER_BALANCE=10000
+export ADMIN_TOKEN=strong_operator_token
 
 python server.py
 # Open http://localhost:8000
@@ -101,6 +108,22 @@ fly deploy
 
 Live at: **https://bitagent.fly.dev**
 
+### Evidence Endpoints
+
+- `/api/status` — current agent state and latest decision
+- `/api/decisions?limit=50` — verifiable decision-cycle JSONL history
+- `/api/trades?limit=50` — paper/live execution journal
+- `/api/evidence` — compact hackathon evidence summary
+
+### Demo Flow
+
+1. Open `https://bitagent.fly.dev`.
+2. Enter the platform and confirm the mode is Paper Trading.
+3. Review six live signal cards and the Agent Decision Engine.
+4. Compare Decision Log against Executed Trades.
+5. Open Settings → Evidence Center and inspect the live JSON endpoints.
+6. Confirm paper equity, realized P&L, open P&L, and strategy rules update from live cycles.
+
 ---
 
 ## Environment Variables
@@ -111,7 +134,10 @@ Live at: **https://bitagent.fly.dev**
 | `BITGET_SECRET_KEY` | Yes | Bitget secret key |
 | `BITGET_PASSPHRASE` | Yes | Bitget passphrase |
 | `QWEN_API_KEY` | No | Qwen LLM key (hackathon endpoint) |
+| `EXEC_MODE` | No | `paper` by default; set `live` for real Bitget orders |
 | `EXEC_ENABLED` | No | Set `false` to disable live execution (default: `true`) |
+| `PAPER_BALANCE` | No | Simulated USDT balance for paper trading (default: `10000`) |
+| `ADMIN_TOKEN` | Recommended | Protects state-changing operator actions while keeping the demo read-only |
 | `EXEC_MAX_PCT` | No | Max position size as % of balance (default: `1.0`) |
 | `EXEC_COOLDOWN` | No | Seconds between trades (default: `300`) |
 | `MAX_DAILY_TRADES` | No | Daily trade cap per UTC day (default: `10`) |
@@ -137,10 +163,6 @@ bitagent/
 
 ---
 
-## Hackathon
-
-**Bitget AI Base Camp — Season 1**  
-Prize pool: $50,000 USDT  
-Submission deadline: June 25, 2026  
+## Ownership
 
 Built by [@Datwebguy](https://github.com/Datwebguy)

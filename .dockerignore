@@ -1,10 +1,9 @@
 __pycache__/
 *.pyc
 *.pyo
-.env
-data/
-agent_log.jsonl
-test_run.py
+.git/
 .chrome*/
 tmp/
 tmp-*.png
+agent_log.jsonl
+data/
