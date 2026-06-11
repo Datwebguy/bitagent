@@ -400,6 +400,14 @@ async def switch_symbol_route(req: SwitchRequest, x_admin_token: str | None = He
         sym = normalize_symbol(req.symbol)
     except ValueError as e:
         return {"ok": False, "error": str(e)}
+    pos = await asyncio.get_running_loop().run_in_executor(_executor, get_open_position)
+    if pos and pos.get("holdSide"):
+        pos_symbol = (pos.get("symbol") or agent.SYMBOL).upper()
+        if pos_symbol != sym:
+            return {
+                "ok": False,
+                "error": f"Close the open {pos_symbol} position before switching assets.",
+            }
     set_symbol(sym)
     _cycle = 0
     _sim_pnl = 0.0

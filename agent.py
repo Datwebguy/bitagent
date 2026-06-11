@@ -309,15 +309,16 @@ def get_paper_account(mark_price: float | None = None) -> dict:
     try:
         con = sqlite3.connect(TRADES_DB)
         rows = con.execute(
-            "SELECT action,side,size,price FROM trades "
-            "WHERE symbol = ? AND action LIKE '%_PAPER' ORDER BY id ASC",
-            (SYMBOL,),
+            "SELECT symbol,action,side,size,price FROM trades "
+            "WHERE action LIKE '%_PAPER' ORDER BY id ASC",
         ).fetchall()
         con.close()
     except Exception:
         rows = []
 
-    for action, side, size, price in rows:
+    open_by_symbol: dict[str, dict] = {}
+    for symbol, action, side, size, price in rows:
+        symbol = str(symbol or SYMBOL).upper()
         action = str(action or "").upper()
         side = str(side or "").lower()
         size = float(size or 0)
@@ -325,13 +326,21 @@ def get_paper_account(mark_price: float | None = None) -> dict:
         if size <= 0 or price <= 0:
             continue
         if action.startswith("OPEN_"):
-            pos_side, pos_size, pos_entry = side, size, price
-        elif action.startswith("CLOSE_") and pos_side and pos_size > 0:
-            if pos_side == "long":
-                realized += (price - pos_entry) * pos_size
-            elif pos_side == "short":
-                realized += (pos_entry - price) * pos_size
-            pos_side, pos_size, pos_entry = "", 0.0, 0.0
+            open_by_symbol[symbol] = {"side": side, "size": size, "entry": price}
+        elif action.startswith("CLOSE_"):
+            open_pos = open_by_symbol.get(symbol)
+            if open_pos and open_pos["size"] > 0:
+                if open_pos["side"] == "long":
+                    realized += (price - open_pos["entry"]) * open_pos["size"]
+                elif open_pos["side"] == "short":
+                    realized += (open_pos["entry"] - price) * open_pos["size"]
+                open_by_symbol.pop(symbol, None)
+
+    active_pos = open_by_symbol.get(SYMBOL)
+    if active_pos:
+        pos_side = active_pos["side"]
+        pos_size = active_pos["size"]
+        pos_entry = active_pos["entry"]
 
     if mark_price is None:
         try:
