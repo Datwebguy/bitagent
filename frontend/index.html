@@ -941,6 +941,23 @@ footer .sep{color:var(--border2)}
   cursor:pointer;font-size:12px;
 }
 .operator-hint{font-size:10px;color:var(--txt3);line-height:1.45;margin-top:8px}
+.operator-unlock-pop{
+  position:fixed;top:74px;left:50%;transform:translateX(-50%);
+  z-index:9998;width:min(420px,calc(100vw - 24px));
+  padding:14px;border-radius:12px;background:rgba(18,24,34,.96);
+  border:1px solid rgba(240,185,11,.28);
+  box-shadow:0 18px 60px rgba(0,0,0,.42);
+  display:none;
+}
+.operator-unlock-pop.show{display:block}
+.operator-unlock-pop .operator-card{display:block;margin:0;background:transparent;border:none;padding:0}
+.operator-unlock-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.operator-unlock-title{font-size:12px;color:var(--gold);font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.operator-unlock-close{
+  border:1px solid var(--border2);background:transparent;color:var(--txt3);
+  border-radius:8px;width:28px;height:28px;cursor:pointer;
+}
+.operator-unlock-close:hover{color:var(--txt);border-color:var(--txt2)}
 
 .connect-footer{
   padding:14px 28px;border-top:1px solid var(--border);
@@ -2118,6 +2135,22 @@ footer .sep{color:var(--border2)}
   </div>
 </div>
 
+<div class="operator-unlock-pop" id="operatorUnlockPop" role="dialog" aria-modal="false" aria-labelledby="operatorUnlockTitle">
+  <div class="operator-unlock-head">
+    <div class="operator-unlock-title" id="operatorUnlockTitle">Operator Unlock Required</div>
+    <button class="operator-unlock-close" type="button" onclick="hideOperatorUnlock()" aria-label="Close operator unlock">×</button>
+  </div>
+  <div class="operator-card">
+    <label class="connect-label" for="operatorTokenQuickInput">Operator Token</label>
+    <div class="operator-row">
+      <input class="connect-input" id="operatorTokenQuickInput" type="password"
+        placeholder="Admin token" autocomplete="current-password">
+      <button class="operator-btn" type="button" onclick="saveOperatorToken('operatorTokenQuickInput')">Unlock</button>
+    </div>
+    <div class="operator-hint" id="operatorUnlockHint">Switching assets changes the active agent market and requires operator approval.</div>
+  </div>
+</div>
+
 <!-- CONNECT SCREEN -->
 <div id="connectScreen" class="hide">
   <div class="connect-card">
@@ -2296,22 +2329,38 @@ async function fetchJson(url, options = {}, timeoutMs = 12000) {
   }
 }
 
-function saveOperatorToken() {
-  const input = document.getElementById('operatorTokenInput');
+function saveOperatorToken(inputId = 'operatorTokenInput') {
+  const input = document.getElementById(inputId);
   _operatorToken = (input?.value || '').trim();
   try {
     if (_operatorToken) sessionStorage.setItem('bitagent_operator_token', _operatorToken);
     else sessionStorage.removeItem('bitagent_operator_token');
   } catch(e) {}
   updateOperatorUI();
+  if (_operatorToken) hideOperatorUnlock();
   showMToast(_operatorToken ? 'Operator unlocked' : 'Operator token cleared');
 }
 
 function updateOperatorUI() {
   const card = document.getElementById('operatorCard');
   const input = document.getElementById('operatorTokenInput');
+  const quick = document.getElementById('operatorTokenQuickInput');
   if (card) card.classList.toggle('show', _authRequired && !_operatorToken);
   if (input && _operatorToken) input.value = _operatorToken;
+  if (quick && _operatorToken) quick.value = _operatorToken;
+}
+
+function showOperatorUnlock(reason = 'This operator action requires the admin token.') {
+  const pop = document.getElementById('operatorUnlockPop');
+  const hint = document.getElementById('operatorUnlockHint');
+  if (hint) hint.textContent = reason;
+  if (pop) pop.classList.add('show');
+  setTimeout(() => document.getElementById('operatorTokenQuickInput')?.focus(), 50);
+  showMToast('Operator unlock required');
+}
+
+function hideOperatorUnlock() {
+  document.getElementById('operatorUnlockPop')?.classList.remove('show');
 }
 
 function hydrateInitialSnapshot(snapshot) {
@@ -3293,7 +3342,11 @@ function switchSymbol(el) {
   })
   .catch(err => {
     _isSwitching = false;
-    showMToast(err.name === 'AbortError' ? 'Symbol switch timed out' : 'Symbol switch failed');
+    if ((err.message || '').toLowerCase().includes('operator unlock')) {
+      showOperatorUnlock('Switching assets changes the active agent market and requires operator approval. Enter the operator token, then choose the asset again.');
+    } else {
+      showMToast(err.name === 'AbortError' ? 'Symbol switch timed out' : 'Symbol switch failed');
+    }
     console.error('Symbol switch error:', err);
   });
 
