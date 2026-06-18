@@ -1843,7 +1843,6 @@ function updatePosition(pos) {
   const rows   = document.getElementById('posRows');
   const hdrVal = document.getElementById('hdrPosVal');
   const closeBtn = document.getElementById('posCloseBtn');
-  updateOrderActionControls();
 
   if (!pos || !pos.holdSide) {
     if (badge)    { badge.className = 'pos-badge flat'; badge.textContent = 'FLAT'; }
@@ -1851,6 +1850,7 @@ function updatePosition(pos) {
     if (rows)     rows.innerHTML = '<div class="pos-empty" style="grid-column:1/-1">No open position</div>';
     if (closeBtn) closeBtn.disabled = true;
     _posSnapshot = null;
+    updateOrderActionControls();
     syncMobileMetrics();
     return;
   }
@@ -1860,7 +1860,6 @@ function updatePosition(pos) {
   const isBull = side === 'long';
   if (badge)  { badge.className = `pos-badge ${isBull ? 'long' : 'short'}`; badge.textContent = side.toUpperCase(); }
   if (hdrVal) { hdrVal.textContent = side.toUpperCase(); hdrVal.style.color = isBull ? 'var(--bull)' : 'var(--bear)'; }
-  if (closeBtn) closeBtn.disabled = false;
 
   const base    = (pos.symbol || 'BTCUSDT').replace('USDT','');
   const size    = parseFloat(pos.total || pos.available || 0);
@@ -1873,21 +1872,34 @@ function updatePosition(pos) {
     ${entry > 0 ? `<div class="pos-row"><span class="pos-key">Entry</span><span class="pos-val">$${fmt(entry)}</span></div>` : ''}
     <div class="pos-row"><span class="pos-key">Opened</span><span class="pos-val">${openedAt}</span></div>
   `;
+  updateOrderActionControls();
   syncMobileMetrics();
 }
 
 function updateOrderActionControls() {
   const cancelBtn = document.getElementById('cancelOrdersBtn');
-  if (!cancelBtn) return;
+  const closeBtn = document.getElementById('posCloseBtn');
   const ui = getUiState();
-  const paperMode = ui.isPaper;
-  const canCancel = paperMode || ui.operatorConnected || ui.sessionConnected;
-  cancelBtn.disabled = !canCancel;
-  cancelBtn.title = paperMode && !ui.operatorConnected && !ui.sessionConnected
-    ? 'Paper mode has no resting exchange orders to cancel.'
-    : canCancel
-    ? 'Cancel unfilled open orders for the selected symbol.'
-    : 'Connect an account before canceling exchange orders.';
+  const canManageExchange = ui.isLive && (ui.sessionConnected || ui.operatorConnected);
+  const canClosePosition = canManageExchange && !!_posSnapshot;
+  if (cancelBtn) {
+    cancelBtn.disabled = !canManageExchange;
+    cancelBtn.title = ui.isPaper
+      ? 'Paper mode has no resting exchange orders to cancel.'
+      : canManageExchange
+      ? 'Cancel unfilled open orders for the selected symbol.'
+      : 'Connect your Bitget account before canceling exchange orders.';
+  }
+  if (closeBtn) {
+    closeBtn.disabled = !canClosePosition;
+    closeBtn.title = ui.isPaper
+      ? 'Paper positions are simulated and close through the paper engine.'
+      : !_posSnapshot
+      ? 'No open position to close.'
+      : canManageExchange
+      ? 'Close the current Bitget futures position.'
+      : 'Connect your Bitget account before closing positions.';
+  }
 }
 
 function isPaperUiMode() {
@@ -1919,21 +1931,30 @@ function closeSheet() {
 
 async function confirmClosePosition() {
   closeSheet();
-  if (!_sessionConnected && !(_operatorMode && _operatorToken)) {
-    showMToast('Shared paper feed is read-only. Connect your account to manage your own positions.');
+  const ui = getUiState();
+  if (ui.isPaper) {
+    showMToast('Paper mode is simulated; exchange close orders are only available in Live Account mode.');
     return;
   }
-  const endpoint = (_operatorMode && _operatorToken && !_sessionConnected) ? '/api/close-position' : '/api/session/close-position';
+  if (!ui.sessionConnected && !ui.operatorConnected) {
+    showMToast('Connect your Bitget account before closing positions.');
+    return;
+  }
+  if (!_posSnapshot) {
+    showMToast('No open position to close.');
+    return;
+  }
+  const endpoint = (ui.operatorConnected && !_sessionConnected) ? '/api/close-position' : '/api/session/close-position';
   try {
     const data = await fetchJson(endpoint, {method: 'POST'}, 20000);
-    if (!data.ok && isOperatorUnlockMessage(data.error)) {
+    if (!data.ok && _operatorMode && isOperatorUnlockMessage(data.error)) {
       showOperatorUnlock('Closing an operator position requires the operator token.');
     } else {
       showMToast(data.ok ? 'Position closed' : (data.error || 'Close failed'));
       if (data.position !== undefined) updatePosition(data.position);
     }
   } catch(e) {
-    if (isOperatorUnlockMessage(e.message)) {
+    if (_operatorMode && isOperatorUnlockMessage(e.message)) {
       showOperatorUnlock('Closing an operator position requires the operator token.');
     } else {
       showMToast(e.name === 'AbortError' ? 'Close request timed out' : 'Request failed');
@@ -1943,21 +1964,26 @@ async function confirmClosePosition() {
 
 async function confirmCancelOrders() {
   const symbol = formatSymbol(_currentSymbol || 'BTCUSDT');
-  if (isPaperUiMode() && !_operatorMode && !_sessionConnected) {
-    showMToast('Paper mode has no resting exchange orders to cancel');
+  const ui = getUiState();
+  if (ui.isPaper) {
+    showMToast('Paper mode has no resting exchange orders to cancel.');
+    return;
+  }
+  if (!ui.sessionConnected && !ui.operatorConnected) {
+    showMToast('Connect your Bitget account before canceling exchange orders.');
     return;
   }
   if (!confirm(`Cancel all open orders for ${symbol}? This does not close an active position.`)) return;
-  const endpoint = (_operatorMode && _operatorToken && !_sessionConnected) ? '/api/cancel-orders' : '/api/session/cancel-orders';
+  const endpoint = (ui.operatorConnected && !_sessionConnected) ? '/api/cancel-orders' : '/api/session/cancel-orders';
   try {
     const data = await fetchJson(endpoint, {method: 'POST'}, 20000);
-    if (!data.ok && isOperatorUnlockMessage(data.error)) {
+    if (!data.ok && _operatorMode && isOperatorUnlockMessage(data.error)) {
       showOperatorUnlock('Canceling operator orders requires the operator token.');
       return;
     }
     showMToast(data.ok ? (data.detail || 'Open orders canceled') : (data.error || data.detail || 'Cancel failed'));
   } catch(e) {
-    if (isOperatorUnlockMessage(e.message)) {
+    if (_operatorMode && isOperatorUnlockMessage(e.message)) {
       showOperatorUnlock('Canceling operator orders requires the operator token.');
     } else {
       showMToast(e.name === 'AbortError' ? 'Cancel request timed out' : (e.message || 'Cancel failed'));
