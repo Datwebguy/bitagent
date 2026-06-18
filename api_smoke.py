@@ -12,6 +12,7 @@ CHECKS = (
     ("/static/styles.css", "css"),
     ("/static/runtime-state.js", "js"),
     ("/static/api-client.js", "js"),
+    ("/static/market-rendering.js", "js"),
     ("/static/app.js", "js"),
     ("/api/status", "json"),
     ("/api/evidence", "json"),
@@ -115,6 +116,7 @@ def check(base_url: str, path: str, kind: str, timeout: float) -> tuple[bool, st
         script_markers = {
             "/static/runtime-state.js": ("getUiState", "ENTERED_PLATFORM_KEY"),
             "/static/api-client.js": ("fetchJson", "AbortController"),
+            "/static/market-rendering.js": ("buildSignalCards", "updateDecision"),
             "/static/app.js": ("rebuildConnectSelect", "connect()"),
         }
         markers = script_markers.get(path, ("getUiState", "rebuildConnectSelect"))
