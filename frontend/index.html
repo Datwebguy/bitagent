@@ -2519,6 +2519,40 @@ function updateOperatorUI() {
   updateOrderActionControls();
 }
 
+function getUiState(data = {}) {
+  const session = data.session || _sessionInfo || {};
+  const tradeMode = session.trade_mode === 'live' ? 'live' : _tradeMode === 'live' ? 'live' : 'paper';
+  const isLive = tradeMode === 'live';
+  const sessionConnected = !!session.credentials_set || !!_sessionConnected;
+  const operatorConnected = _operatorMode && !!_operatorToken && !!_isConnected;
+  const connected = sessionConnected || operatorConnected;
+  const accountBalanceRaw = data.balance_source === 'bitget_futures'
+    ? data.balance
+    : session.account_balance ?? _sessionAccountBalance;
+  const accountBalance = accountBalanceRaw == null ? null : Number(accountBalanceRaw);
+  const paperRaw = data.account?.equity
+    ?? session.paper_equity
+    ?? session.paper_balance
+    ?? (_tradeMode === 'paper' && data.balance_source !== 'bitget_futures' ? data.balance : null)
+    ?? _lastPaperEquity
+    ?? 10000;
+  const paperEquity = Number.isFinite(Number(paperRaw)) && Number(paperRaw) > 0
+    ? Number(paperRaw)
+    : 10000;
+  return {
+    tradeMode,
+    isPaper: !isLive,
+    isLive,
+    session,
+    sessionConnected,
+    operatorConnected,
+    connected,
+    unlocked: !!session.live_unlocked,
+    accountBalance: Number.isFinite(accountBalance) ? accountBalance : null,
+    paperEquity,
+  };
+}
+
 function updateSessionInfo(session, scope) {
   if (session) {
     _sessionInfo = {...session, scope: scope || session.scope || 'shared_agent'};
@@ -2550,7 +2584,8 @@ function updateSessionInfo(session, scope) {
 }
 
 function updateTradeModeUI() {
-  const isLive = _tradeMode === 'live';
+  const ui = getUiState();
+  const isLive = ui.isLive;
   const paperBtn = document.getElementById('tradeModePaperBtn');
   const liveBtn = document.getElementById('tradeModeLiveBtn');
   paperBtn?.classList.toggle('active', !isLive);
@@ -2564,26 +2599,25 @@ function updateTradeModeUI() {
 }
 
 function syncAccountHeaderState() {
-  const connected = !!_sessionConnected || (_operatorMode && !!_operatorToken && !!_isConnected);
-  const isLive = _tradeMode === 'live';
+  const ui = getUiState();
   const btn = document.getElementById('accountActionBtn');
   const label = document.getElementById('balanceLabel');
   const balance = document.getElementById('hdrBalance');
 
   if (btn) {
-    btn.textContent = connected ? 'Disconnect' : 'Connect Account';
-    btn.title = connected ? 'Disconnect account' : 'Connect your Bitget account';
+    btn.textContent = ui.connected ? 'Disconnect' : 'Connect Account';
+    btn.title = ui.connected ? 'Disconnect account' : 'Connect your Bitget account';
   }
 
   if (label) {
-    label.textContent = !isLive
+    label.textContent = ui.isPaper
       ? 'Paper Equity'
-      : connected && _sessionAccountBalance != null
+      : ui.connected && ui.accountBalance != null
       ? 'Bitget Balance'
       : 'Live Balance';
   }
 
-  if (balance && isLive && !connected) {
+  if (balance && ui.isLive && !ui.connected) {
     balance.textContent = '$—';
     balance.style.color = 'var(--txt3)';
   }
@@ -2594,21 +2628,12 @@ function renderHeaderBalance(data = {}) {
   const label = document.getElementById('balanceLabel');
   if (!el) return;
 
-  const paperEquity = Number(
-    data.account?.equity
-      ?? data.session?.paper_equity
-      ?? _sessionInfo?.paper_equity
-      ?? data.balance
-      ?? _lastPaperEquity
-      ?? 10000
-  );
-  if (Number.isFinite(paperEquity) && paperEquity > 0) {
-    _lastPaperEquity = paperEquity;
-  }
+  const ui = getUiState(data);
+  _lastPaperEquity = ui.paperEquity;
 
-  if (_tradeMode === 'paper') {
+  if (ui.isPaper) {
     if (label) label.textContent = 'Paper Equity';
-    el.textContent = '$' + Number(_lastPaperEquity).toLocaleString('en-US', {
+    el.textContent = '$' + ui.paperEquity.toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
@@ -2616,9 +2641,9 @@ function renderHeaderBalance(data = {}) {
     return;
   }
 
-  if (_sessionConnected && _sessionAccountBalance != null) {
+  if (ui.sessionConnected && ui.accountBalance != null) {
     if (label) label.textContent = 'Bitget Balance';
-    el.textContent = '$' + Number(_sessionAccountBalance).toLocaleString('en-US', {
+    el.textContent = '$' + ui.accountBalance.toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
@@ -2675,20 +2700,17 @@ async function refreshSessionAccount(silent = true) {
 }
 
 function updateLiveReadinessUI() {
-  const s = _sessionInfo || {};
-  const connected = !!s.credentials_set;
-  const unlocked = !!s.live_unlocked;
-  const liveSelected = _tradeMode === 'live';
+  const ui = getUiState();
   const dot = document.getElementById('mLiveDot');
   const txt = document.getElementById('mLiveTxt');
   const hint = document.getElementById('mLiveHint');
   const btn = document.getElementById('mLiveBtn');
-  if (dot) dot.className = 'm-status-dot ' + (liveSelected && unlocked ? 'live' : 'off');
-  if (txt) txt.textContent = liveSelected && unlocked ? 'Live ready' : liveSelected ? 'Live locked' : 'Paper mode';
-  if (hint) hint.textContent = !liveSelected ? 'Simulated execution' : connected ? (unlocked ? 'Execution gated' : 'Account verified') : 'Connect account first';
+  if (dot) dot.className = 'm-status-dot ' + (ui.isLive && ui.unlocked ? 'live' : 'off');
+  if (txt) txt.textContent = ui.isLive && ui.unlocked ? 'Live ready' : ui.isLive ? 'Live locked' : 'Paper mode';
+  if (hint) hint.textContent = ui.isPaper ? 'Simulated execution' : ui.sessionConnected ? (ui.unlocked ? 'Execution gated' : 'Account verified') : 'Connect account first';
   if (btn) {
-    btn.textContent = unlocked ? 'Lock' : 'Unlock';
-    btn.disabled = !liveSelected || !connected;
+    btn.textContent = ui.unlocked ? 'Lock' : 'Unlock';
+    btn.disabled = ui.isPaper || !ui.sessionConnected;
   }
   updateTradeModeUI();
   updateSessionExecutionUI();
@@ -2706,28 +2728,22 @@ function setFundingText(id, text, cls = '') {
 
 function updateFundingReadiness(data = {}) {
   const mode = data.risk_config?.mode || 'paper';
-  const s = _sessionInfo || {};
-  const connected = !!s.credentials_set;
-  const unlocked = !!s.live_unlocked;
-  const liveSelected = _tradeMode === 'live';
-  const sessionLive = liveSelected && connected && !_operatorToken;
-  const accountBalance = _sessionAccountBalance != null ? Number(_sessionAccountBalance) : null;
-  const paperEquity = Number(data.account?.equity || data.balance || _manualBudget || 10000);
-  const connectedAt = s.connected_at ? new Date(s.connected_at).toLocaleTimeString('en-US', {hour12:false}) : '';
+  const ui = getUiState(data);
+  const connectedAt = ui.session.connected_at ? new Date(ui.session.connected_at).toLocaleTimeString('en-US', {hour12:false}) : '';
 
   const status = document.getElementById('fundingStatus');
   const note = document.getElementById('fundingNote');
 
-  if (liveSelected) {
-    if (status) status.textContent = connected ? (unlocked ? 'Live ready' : 'Account connected') : 'Not connected';
-    setFundingText('fundingFunds', connected ? (accountBalance != null ? `$${fmt(accountBalance)} USDT` : 'Reading Bitget balance') : 'Connect Bitget account', connected && accountBalance != null ? 'pass' : 'wait');
-    setFundingText('fundingSource', connected ? 'Verified Bitget futures' : 'No account connected', connected ? 'pass' : 'wait');
+  if (ui.isLive) {
+    if (status) status.textContent = ui.sessionConnected ? (ui.unlocked ? 'Live ready' : 'Account connected') : 'Not connected';
+    setFundingText('fundingFunds', ui.sessionConnected ? (ui.accountBalance != null ? `$${fmt(ui.accountBalance)} USDT` : 'Reading Bitget balance') : 'Connect Bitget account', ui.sessionConnected && ui.accountBalance != null ? 'pass' : 'wait');
+    setFundingText('fundingSource', ui.sessionConnected ? 'Verified Bitget futures' : 'No account connected', ui.sessionConnected ? 'pass' : 'wait');
     setFundingText('fundingCustody', 'No BitAgent custody', 'pass');
-    setFundingText('fundingGate', connected ? (unlocked ? 'Preview required' : 'Risk unlock required') : 'Connect first', unlocked ? 'pass' : 'wait');
+    setFundingText('fundingGate', ui.sessionConnected ? (ui.unlocked ? 'Preview required' : 'Risk unlock required') : 'Connect first', ui.unlocked ? 'pass' : 'wait');
     if (note) {
-      note.textContent = !connected
+      note.textContent = !ui.sessionConnected
         ? 'Live Account mode uses your own Bitget futures account. Connect API credentials before unlocking execution.'
-        : unlocked
+        : ui.unlocked
         ? 'Live execution still requires an order preview and exact confirmation before any Bitget order is sent.'
         : `Bitget account verified${connectedAt ? ` at ${connectedAt}` : ''}. Funds stay on Bitget; unlock live risk only when you intend to preview a real futures order.`;
     }
@@ -2735,10 +2751,10 @@ function updateFundingReadiness(data = {}) {
   }
 
   if (status) status.textContent = mode === 'paper' ? 'Paper only' : 'Operator live';
-  setFundingText('fundingFunds', mode === 'paper' ? `$${fmt(paperEquity)} paper equity` : 'Operator account', mode === 'paper' ? 'wait' : 'pass');
+  setFundingText('fundingFunds', mode === 'paper' ? `$${fmt(ui.paperEquity)} paper equity` : 'Operator account', mode === 'paper' ? 'wait' : 'pass');
   setFundingText('fundingSource', mode === 'paper' ? 'BitAgent paper wallet' : 'Configured Bitget account', mode === 'paper' ? '' : 'pass');
   setFundingText('fundingCustody', 'User keeps funds on Bitget', 'pass');
-  setFundingText('fundingGate', connected ? 'Session connected' : 'Connect account', connected ? 'wait' : 'wait');
+  setFundingText('fundingGate', ui.sessionConnected ? 'Session connected' : 'Connect account', ui.sessionConnected ? 'wait' : 'wait');
   if (note) {
     note.textContent = mode === 'paper'
       ? 'Paper mode uses simulated equity. Real users fund Bitget directly; BitAgent reads balance only after API connection.'
@@ -2747,7 +2763,7 @@ function updateFundingReadiness(data = {}) {
 }
 
 async function toggleLiveUnlock() {
-  if (_tradeMode !== 'live') {
+  if (getUiState().isPaper) {
     showMToast('Switch to Live Account mode before unlocking live trading');
     return;
   }
@@ -2799,26 +2815,23 @@ function escapeHtml(value = '') {
 }
 
 function updateSessionExecutionUI() {
-  const s = _sessionInfo || {};
-  const connected = !!s.credentials_set;
-  const unlocked = !!s.live_unlocked;
+  const ui = getUiState();
   const actions = document.getElementById('sessionExecActions');
   const connectBtn = document.getElementById('connectAccountActionBtn');
   const preview = document.getElementById('previewOrderBtn');
   const place = document.getElementById('placeOrderBtn');
-  const liveSelected = _tradeMode === 'live';
-  const canPreview = liveSelected && connected && unlocked;
+  const canPreview = ui.isLive && ui.sessionConnected && ui.unlocked;
   const proposalDir = String(_lastSessionProposal?.direction || 'FLAT').toUpperCase();
   const canPlace = canPreview && (proposalDir === 'LONG' || proposalDir === 'SHORT');
 
-  actions?.classList.toggle('connect-needed', liveSelected && !connected);
-  if (connectBtn) connectBtn.style.display = liveSelected && !connected ? '' : 'none';
+  actions?.classList.toggle('connect-needed', ui.isLive && !ui.sessionConnected);
+  if (connectBtn) connectBtn.style.display = ui.isLive && !ui.sessionConnected ? '' : 'none';
   if (preview) {
     preview.disabled = !canPreview;
-    preview.title = !liveSelected
+    preview.title = ui.isPaper
       ? 'Switch to Live Account mode before previewing a real order.'
-      : connected
-      ? unlocked ? 'Preview the current session order without placing it.' : 'Unlock live readiness first.'
+      : ui.sessionConnected
+      ? ui.unlocked ? 'Preview the current session order without placing it.' : 'Unlock live readiness first.'
       : 'Connect your Bitget account first.';
   }
   if (place) {
@@ -2845,12 +2858,12 @@ function renderSessionExecLog() {
   const log = document.getElementById('sessionExecLog');
   if (!log) return;
   if (!_sessionExecEvents.length) {
-    const s = _sessionInfo || {};
-    const msg = _tradeMode !== 'live'
+    const ui = getUiState();
+    const msg = ui.isPaper
       ? 'Paper mode is active. Switch to Live Account to preview or place real orders.'
-      : !s.credentials_set
+      : !ui.sessionConnected
       ? 'Connect a Bitget futures account before live execution.'
-      : !s.live_unlocked
+      : !ui.unlocked
         ? 'Live readiness is locked for this session.'
         : _lastSessionProposal
           ? proposalText(_lastSessionProposal)
@@ -2868,7 +2881,7 @@ function renderSessionExecLog() {
 }
 
 async function previewSessionOrder() {
-  if (_tradeMode !== 'live') {
+  if (getUiState().isPaper) {
     showMToast('Switch to Live Account mode before previewing a real order');
     return;
   }
@@ -2897,7 +2910,7 @@ async function previewSessionOrder() {
 }
 
 async function placeSessionOrder() {
-  if (_tradeMode !== 'live') {
+  if (getUiState().isPaper) {
     showMToast('Switch to Live Account mode before placing a real order');
     return;
   }
@@ -3485,36 +3498,35 @@ function updateExecution(exec) {
 
 function updateExecutionHelp(data = {}) {
   const mode = data.risk_config?.mode || 'paper';
-  const liveSelected = _tradeMode === 'live';
-  const sessionLive = liveSelected && _sessionConnected && !_operatorToken;
+  const ui = getUiState(data);
   const decision = (data.decision?.direction || 'WAITING').toUpperCase();
   const confidence = data.decision?.confidence;
   const exec = data.execution || {};
   const pos = data.position;
   const account = data.account || {};
   const balance = Number(data.balance || 0);
-  const equity = Number(account.equity || balance || 10000);
+  const equity = ui.paperEquity;
   if (Number.isFinite(equity) && equity > 0) _lastPaperEquity = equity;
 
   const pill = document.getElementById('modePill');
   if (pill) {
-    pill.textContent = liveSelected ? 'LIVE' : 'PAPER';
-    pill.className = liveSelected ? 'mode-pill live' : 'mode-pill';
+    pill.textContent = ui.isLive ? 'LIVE' : 'PAPER';
+    pill.className = ui.isLive ? 'mode-pill live' : 'mode-pill';
   }
 
   const wallet = document.getElementById('helpWallet');
   if (wallet) {
-    const sessionBal = _sessionAccountBalance != null ? _sessionAccountBalance : balance;
-    wallet.textContent = sessionLive
+    const sessionBal = ui.accountBalance != null ? ui.accountBalance : balance;
+    wallet.textContent = ui.isLive && ui.sessionConnected
       ? `Bitget balance $${fmt(sessionBal)}`
-      : !liveSelected
+      : ui.isPaper
         ? `Paper equity $${fmt(equity)}`
         : `Live $${fmt(balance)}`;
-    wallet.className = sessionLive || liveSelected ? 'execution-help-val bull' : 'execution-help-val gold';
+    wallet.className = ui.isLive ? 'execution-help-val bull' : 'execution-help-val gold';
   }
 
   const balLbl = document.getElementById('balanceLabel');
-  if (balLbl) balLbl.textContent = sessionLive ? 'Bitget Balance' : !liveSelected ? 'Paper Equity' : 'Balance';
+  if (balLbl) balLbl.textContent = ui.isLive && ui.sessionConnected ? 'Bitget Balance' : ui.isPaper ? 'Paper Equity' : 'Live Balance';
 
   const dec = document.getElementById('helpDecision');
   if (dec) {
@@ -3562,9 +3574,9 @@ function updateExecutionHelp(data = {}) {
 
   const note = document.getElementById('helpNote');
   if (note) {
-    if (sessionLive) {
+    if (ui.isLive && ui.sessionConnected) {
       note.innerHTML = '<strong>Connected account:</strong> balance is read from your Bitget futures wallet. Orders still require live unlock, preview, and confirmation.';
-    } else if (!liveSelected) {
+    } else if (ui.isPaper) {
       note.innerHTML = '<strong>Paper mode:</strong> Decision Log shows every AI cycle. Executed Trades shows fills only. Paper equity changes only from paper P&L, not real money.';
     } else {
       note.innerHTML = '<strong>Live Account mode:</strong> connect your Bitget account, unlock live risk, preview, then confirm before any real order is sent.';
@@ -4532,8 +4544,8 @@ document.addEventListener('keydown', e => {
 function updateBalanceLabel(source = _balanceSource) {
   const lbl = document.getElementById('balanceLabel');
   if (!lbl) return;
-  const connected = !!_sessionConnected || (_operatorMode && !!_operatorToken && !!_isConnected);
-  if (_tradeMode === 'live' && !connected) {
+  const ui = getUiState();
+  if (ui.isLive && !ui.connected) {
     lbl.textContent = 'Live Balance';
     return;
   }
@@ -4544,14 +4556,15 @@ function updateBalance(bal, source = 'auto') {
   if (bal == null) return;
   const el = document.getElementById('hdrBalance');
   if (!el) return;
+  const ui = getUiState();
   if (source === 'auto') {
-    source = (_sessionConnected && !_operatorToken) ? 'account' : 'paper';
+    source = (ui.sessionConnected && !_operatorToken) ? 'account' : 'paper';
   }
-  if (_tradeMode === 'paper' && source === 'account') {
+  if (ui.isPaper && source === 'account') {
     renderHeaderBalance();
     return;
   }
-  if (_tradeMode === 'live' && source === 'paper' && !_sessionConnected) {
+  if (ui.isLive && source === 'paper' && !ui.sessionConnected) {
     _balanceSource = 'live_pending';
     updateBalanceLabel('live_pending');
     el.textContent = '$—';
@@ -4571,7 +4584,7 @@ function updateBalance(bal, source = 'auto') {
     flash(el);
   }
   syncAccountHeaderState();
-  if (_tradeMode === 'paper') renderHeaderBalance();
+  if (ui.isPaper) renderHeaderBalance();
 }
 
 
@@ -4799,10 +4812,11 @@ function updatePosition(pos) {
 function updateOrderActionControls() {
   const cancelBtn = document.getElementById('cancelOrdersBtn');
   if (!cancelBtn) return;
-  const paperMode = isPaperUiMode();
-  const canCancel = paperMode || (_operatorMode && !!_operatorToken) || _sessionConnected;
+  const ui = getUiState();
+  const paperMode = ui.isPaper;
+  const canCancel = paperMode || ui.operatorConnected || ui.sessionConnected;
   cancelBtn.disabled = !canCancel;
-  cancelBtn.title = paperMode && !_operatorToken && !_sessionConnected
+  cancelBtn.title = paperMode && !ui.operatorConnected && !ui.sessionConnected
     ? 'Paper mode has no resting exchange orders to cancel.'
     : canCancel
     ? 'Cancel unfilled open orders for the selected symbol.'
@@ -4810,12 +4824,7 @@ function updateOrderActionControls() {
 }
 
 function isPaperUiMode() {
-  const mode = [
-    document.getElementById('modePill')?.textContent,
-    document.getElementById('footerMode')?.textContent,
-    document.getElementById('mRiskMode')?.textContent,
-  ].join(' ').toLowerCase();
-  return mode.includes('paper');
+  return getUiState().isPaper;
 }
 
 function openCloseSheet() {
@@ -4894,7 +4903,8 @@ async function confirmCancelOrders() {
 // MOBILE: SETTINGS PANEL
 // ══════════════════════════════════════════════════════
 function populateMSettings() {
-  const connected = _isConnected || !!(_initPayload && (_initPayload.creds_set || _initPayload.session?.credentials_set));
+  const ui = getUiState(_initPayload || {});
+  const connected = ui.connected;
   const displaySym = formatSymbol(_currentSymbol);
 
   const dot  = document.getElementById('mStatusDot');
