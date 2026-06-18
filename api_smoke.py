@@ -10,6 +10,8 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 CHECKS = (
     ("/", "html"),
     ("/static/styles.css", "css"),
+    ("/static/runtime-state.js", "js"),
+    ("/static/api-client.js", "js"),
     ("/static/app.js", "js"),
     ("/api/status", "json"),
     ("/api/evidence", "json"),
@@ -110,7 +112,13 @@ def check(base_url: str, path: str, kind: str, timeout: float) -> tuple[bool, st
             return False, f"{path}: stylesheet marker not found"
     elif kind == "js":
         text = body.decode("utf-8", errors="ignore")
-        if "getUiState" not in text or "rebuildConnectSelect" not in text:
+        script_markers = {
+            "/static/runtime-state.js": ("getUiState", "ENTERED_PLATFORM_KEY"),
+            "/static/api-client.js": ("fetchJson", "AbortController"),
+            "/static/app.js": ("rebuildConnectSelect", "connect()"),
+        }
+        markers = script_markers.get(path, ("getUiState", "rebuildConnectSelect"))
+        if not all(marker in text for marker in markers):
             return False, f"{path}: script marker not found"
     else:
         text = body.decode("utf-8", errors="ignore")
