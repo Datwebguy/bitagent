@@ -40,7 +40,7 @@ Priority order: Technical → Sentiment → Macro → Momentum → Depth → Vol
 ## Decision Engine
 
 Without a Qwen API key, the agent runs a transparent rule-based majority vote.  
-With `QWEN_API_KEY` set, decisions are handed to `qwen3.6-plus` via the Bitget hackathon endpoint — the model receives all six signal payloads and returns a structured JSON decision including entry, stop-loss, take-profit, confidence, and reasoning.
+With `QWEN_API_KEY` set, decisions are handed to `qwen3.6-plus` through the configured Qwen-compatible endpoint. The model receives all six signal payloads and returns a structured JSON decision including entry, stop-loss, take-profit, confidence, and reasoning.
 
 **Minimum confidence to trade:** 60%  
 **Mode:** paper by default; set `EXEC_MODE=live` only for controlled live trading  
@@ -73,6 +73,10 @@ The server auto-detects the account type on first connection and routes all subs
 
 Paper equity, realized P&L, and open P&L are tracked separately from decision logs. Decision logs show every agent cycle; trade history shows only executed paper/live fills.
 
+Public users can connect their own Bitget futures API key in a browser session without changing the shared operator account. Session live execution is gated by three steps: account verification, the exact `I ACCEPT LIVE RISK` unlock phrase, and a dry-run preview before the exact `PLACE LIVE ORDER` confirmation can submit a real order.
+
+Users fund their Bitget futures account directly; BitAgent does not custody deposits. After a user connects API credentials, the session reads the available USDT futures balance from Bitget and sizes orders from that balance.
+
 ---
 
 ## Running Locally
@@ -92,6 +96,25 @@ python server.py
 # Open http://localhost:8000
 ```
 
+### Smoke Test
+
+Run one full perception-to-decision cycle without storing credentials in the
+repo:
+
+```bash
+python smoke_test.py
+```
+
+The smoke test reads Bitget and Qwen credentials only from environment
+variables. If `QWEN_API_KEY` is unset, it verifies the rule-based fallback.
+
+To verify a running server's public endpoints:
+
+```bash
+python api_smoke.py http://127.0.0.1:8000
+python api_smoke.py https://bitagent.fly.dev
+```
+
 ---
 
 ## Deployment (Fly.io)
@@ -108,20 +131,22 @@ fly deploy
 
 Live at: **https://bitagent.fly.dev**
 
-### Evidence Endpoints
+### Audit Endpoints
 
 - `/api/status` — current agent state and latest decision
 - `/api/decisions?limit=50` — verifiable decision-cycle JSONL history
 - `/api/trades?limit=50` — paper/live execution journal
-- `/api/evidence` — compact hackathon evidence summary
+- `/api/evidence` — compact system evidence summary
+- `/api/audit/evidence` — full audit pack with normalized trade log fields
+- `/api/audit/trades.csv` — CSV trade log: timestamp, pair, direction, price, quantity, balance change
 
-### Demo Flow
+### Product Walkthrough
 
 1. Open `https://bitagent.fly.dev`.
 2. Enter the platform and confirm the mode is Paper Trading.
 3. Review six live signal cards and the Agent Decision Engine.
 4. Compare Decision Log against Executed Trades.
-5. Open Settings → Evidence Center and inspect the live JSON endpoints.
+5. Open Settings → Audit Center and inspect the live JSON endpoints.
 6. Confirm paper equity, realized P&L, open P&L, and strategy rules update from live cycles.
 
 ---
@@ -133,11 +158,12 @@ Live at: **https://bitagent.fly.dev**
 | `BITGET_API_KEY` | Yes | Bitget API key |
 | `BITGET_SECRET_KEY` | Yes | Bitget secret key |
 | `BITGET_PASSPHRASE` | Yes | Bitget passphrase |
-| `QWEN_API_KEY` | No | Qwen LLM key (hackathon endpoint) |
+| `QWEN_API_KEY` | No | Qwen-compatible LLM key |
 | `EXEC_MODE` | No | `paper` by default; set `live` for real Bitget orders |
 | `EXEC_ENABLED` | No | Set `false` to disable live execution (default: `true`) |
 | `PAPER_BALANCE` | No | Simulated USDT balance for paper trading (default: `10000`) |
-| `ADMIN_TOKEN` | Recommended | Protects state-changing operator actions while keeping the demo read-only |
+| `ADMIN_TOKEN` | Recommended | Protects state-changing operator actions |
+| `PUBLIC_PAPER_SYMBOL_SWITCH` | No | Allows public asset switching in paper mode when `true` (default); live mode still requires the operator token |
 | `EXEC_MAX_PCT` | No | Max position size as % of balance (default: `1.0`) |
 | `EXEC_COOLDOWN` | No | Seconds between trades (default: `300`) |
 | `MAX_DAILY_TRADES` | No | Daily trade cap per UTC day (default: `10`) |

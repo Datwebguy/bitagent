@@ -8,3 +8,4 @@ test_run.py
 .chrome*/
 tmp/
 tmp-*.png
+playbooks/

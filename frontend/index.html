@@ -728,7 +728,7 @@ footer .sep{color:var(--border2)}
     radial-gradient(circle at 50% 36%,rgba(18,206,174,.14),transparent 18%),
     radial-gradient(circle at 50% 60%,rgba(24,39,66,.08),transparent 28%);
   filter:blur(10px);opacity:1;
-  animation:introStudioBreath 6s ease-in-out infinite alternate;
+  animation:introAmbientBreath 6s ease-in-out infinite alternate;
 }
 #introScreen::after{
   background:
@@ -819,7 +819,7 @@ footer .sep{color:var(--border2)}
   color:#374151;box-shadow:0 12px 34px rgba(17,24,39,.08);
 }
 .intro-skip:hover{background:#fff;color:#111827;border-color:rgba(17,24,39,.2)}
-@keyframes introStudioBreath{
+@keyframes introAmbientBreath{
   from{transform:scale(1);opacity:.78}
   to{transform:scale(1.08);opacity:1}
 }
@@ -1043,6 +1043,79 @@ footer .sep{color:var(--border2)}
   margin-top:7px;font-size:9px;line-height:1.45;color:var(--txt3);
 }
 .execution-help-note strong{color:var(--txt2);font-weight:700}
+.trade-mode-toggle{
+  display:grid;grid-template-columns:1fr 1fr;gap:6px;
+  margin-top:8px;padding:4px;border:1px solid var(--border);
+  border-radius:7px;background:rgba(0,0,0,.14);
+}
+.trade-mode-btn{
+  min-height:30px;border:1px solid transparent;border-radius:5px;
+  background:transparent;color:var(--txt3);font-family:var(--sans);
+  font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  cursor:pointer;transition:background .16s,color .16s,border-color .16s;
+}
+.trade-mode-btn.active.paper{background:rgba(240,185,11,.08);border-color:rgba(240,185,11,.32);color:var(--gold)}
+.trade-mode-btn.active.live{background:rgba(246,70,93,.08);border-color:rgba(246,70,93,.34);color:var(--bear)}
+.trade-mode-btn:hover:not(.active){border-color:var(--border2);color:var(--txt2)}
+.funding-readiness{
+  margin-top:8px;padding:8px;border:1px solid rgba(0,212,212,.16);
+  border-radius:6px;background:rgba(0,212,212,.035);
+}
+.funding-readiness-title{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin-bottom:7px;font-size:8px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--teal);font-weight:800;
+}
+.funding-readiness-title span:last-child{
+  color:var(--txt3);font-family:var(--mono);letter-spacing:.04em;text-transform:none;
+  font-weight:600;white-space:nowrap;
+}
+.funding-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.funding-chip{
+  min-width:0;padding:6px 7px;border-radius:5px;
+  background:rgba(17,24,39,.72);border:1px solid var(--border);
+}
+.funding-key{
+  display:block;font-size:8px;letter-spacing:.08em;color:var(--txt3);
+  text-transform:uppercase;margin-bottom:3px;
+}
+.funding-val{
+  display:block;font-family:var(--mono);font-size:9px;color:var(--txt2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.funding-val.pass{color:var(--bull)}
+.funding-val.wait{color:var(--gold)}
+.funding-val.fail{color:var(--bear)}
+.funding-note{margin-top:6px;font-size:9px;line-height:1.4;color:var(--txt3)}
+.execution-actions{
+  display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px;
+}
+.execution-actions.connect-needed{grid-template-columns:1fr}
+.execution-actions.connect-needed #previewOrderBtn,
+.execution-actions.connect-needed #placeOrderBtn{display:none}
+.exec-action-btn{
+  min-height:34px;border-radius:6px;border:1px solid var(--border2);
+  background:var(--card2);color:var(--txt2);font-family:var(--sans);
+  font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  cursor:pointer;transition:opacity .16s,border-color .16s,color .16s,background .16s;
+}
+.exec-action-btn.secondary{border-color:rgba(0,212,212,.28);color:var(--teal)}
+.exec-action-btn.danger{border-color:rgba(246,70,93,.3);color:var(--bear);background:rgba(246,70,93,.06)}
+.exec-action-btn.connect{border-color:rgba(0,212,212,.34);color:var(--teal);background:rgba(0,212,212,.06)}
+.exec-action-btn:hover:not(:disabled){border-color:currentColor;background:rgba(255,255,255,.04)}
+.exec-action-btn:disabled{cursor:not-allowed;opacity:.42}
+.session-exec-log{
+  margin-top:7px;padding:7px 8px;border:1px solid var(--border);
+  border-radius:6px;background:rgba(0,0,0,.14);font-family:var(--mono);
+  font-size:9px;line-height:1.45;color:var(--txt2);min-height:34px;
+}
+.session-exec-entry{display:flex;gap:6px;justify-content:space-between;align-items:flex-start}
+.session-exec-entry + .session-exec-entry{margin-top:5px;padding-top:5px;border-top:1px solid var(--border)}
+.session-exec-main{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.session-exec-state{white-space:nowrap;color:var(--teal);font-weight:700}
+.session-exec-state.live{color:var(--bear)}
+.session-exec-state.blocked{color:var(--gold)}
+.session-exec-muted{color:var(--txt3)}
 .rules-panel{
   border-bottom:1px solid var(--border);
   background:rgba(0,212,212,.025);
@@ -1224,7 +1297,6 @@ footer .sep{color:var(--border2)}
 /* ═══════════════════════════════════════════════════════
    MOBILE-ONLY ELEMENTS (hidden on desktop by default)
    ═══════════════════════════════════════════════════════ */
-.pos-close-btn{display:none}
 .m-metrics-row{display:none}
 #tab-settings{display:none}
 
@@ -1239,18 +1311,24 @@ footer .sep{color:var(--border2)}
 }
 .m-toast.show{transform:translateX(-50%) translateY(0)}
 
-/* Close-position button */
-.pos-close-btn{
-  width:calc(100% - 24px);margin:0 12px 12px;
-  padding:16px;border-radius:10px;border:none;
-  background:rgba(246,70,93,.1);border:1px solid rgba(246,70,93,.3);
-  color:var(--bear);font-family:var(--sans);font-size:14px;font-weight:700;
-  cursor:pointer;transition:background .2s,transform .1s;min-height:52px;
+/* Position action buttons */
+.pos-actions{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  padding:10px 12px 12px;border-top:1px solid var(--border);
+}
+.pos-action-btn{
+  min-height:38px;padding:9px 10px;border-radius:8px;
+  background:var(--card2);border:1px solid var(--border2);
+  color:var(--txt2);font-family:var(--sans);font-size:10px;font-weight:800;
+  letter-spacing:.06em;text-transform:uppercase;
+  cursor:pointer;transition:background .2s,transform .1s,border-color .2s,color .2s;
   -webkit-tap-highlight-color:transparent;
 }
-.pos-close-btn:disabled{opacity:.35;cursor:not-allowed}
-.pos-close-btn:not(:disabled):hover{background:rgba(246,70,93,.18)}
-.pos-close-btn:not(:disabled):active{transform:scale(.98)}
+.pos-action-btn.danger{background:rgba(246,70,93,.1);border-color:rgba(246,70,93,.3);color:var(--bear)}
+.pos-action-btn.secondary{background:rgba(0,212,212,.055);border-color:rgba(0,212,212,.24);color:var(--teal)}
+.pos-action-btn:disabled{opacity:.35;cursor:not-allowed}
+.pos-action-btn:not(:disabled):hover{border-color:currentColor;background:rgba(255,255,255,.04)}
+.pos-action-btn:not(:disabled):active{transform:scale(.98)}
 
 /* Mobile metrics row */
 .m-metrics-row{
@@ -1332,13 +1410,25 @@ footer .sep{color:var(--border2)}
 .evidence-row:last-child{border:none}
 .evidence-key{color:var(--txt3)}
 .evidence-val{font-family:var(--mono);color:var(--txt);text-align:right}
-.evidence-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.evidence-link{
-  display:flex;align-items:center;justify-content:center;
-  min-height:40px;padding:9px 8px;border-radius:8px;
-  background:var(--card2);border:1px solid var(--border2);
-  color:var(--teal);text-decoration:none;font-size:11px;font-weight:700;
+.audit-list{display:grid;gap:7px;margin-top:10px}
+.audit-item{
+  display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;
+  padding:9px;border-radius:8px;background:var(--card2);border:1px solid var(--border2);
 }
+.audit-meta{min-width:0}
+.audit-name{display:block;font-size:11px;font-weight:800;color:var(--txt);margin-bottom:3px}
+.audit-path{
+  display:block;font-family:var(--mono);font-size:9px;color:var(--txt3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.audit-actions{display:flex;gap:6px}
+.audit-btn{
+  min-width:34px;min-height:32px;padding:0 9px;border-radius:7px;
+  border:1px solid var(--border2);background:rgba(0,0,0,.12);
+  color:var(--teal);font-size:10px;font-weight:800;cursor:pointer;
+  font-family:var(--sans);
+}
+.audit-btn:hover{border-color:rgba(0,212,212,.4);background:rgba(0,212,212,.06)}
 .evidence-note{margin-top:10px;font-size:10px;color:var(--txt3);line-height:1.45}
 .m-settings-disconnect{
   width:100%;padding:15px;border-radius:10px;
@@ -1396,7 +1486,8 @@ footer .sep{color:var(--border2)}
 
   /* Show tab bar + mobile elements, hide desktop extras */
   .m-tab-bar{display:flex}
-  .pos-close-btn{display:block}
+  .pos-actions{padding:12px 14px 14px}
+  .pos-action-btn{min-height:48px;font-size:11px}
   .m-metrics-row{display:flex}
   .ticker-wrap{display:none}
   footer{display:none}
@@ -1607,11 +1698,11 @@ footer .sep{color:var(--border2)}
       </div>
       <div class="stat-chip"><span class="lbl">Price</span><span class="val" id="hdrPrice">$—</span></div>
       <div class="stat-chip"><span class="lbl">Cycle</span><span class="val" id="hdrCycle">#0</span></div>
-      <div class="stat-chip" id="balanceChip" title="Set optional account budget fallback" style="cursor:pointer" onclick="toggleBudgetPopover()">
-        <span class="lbl" id="balanceLabel">Balance</span><span class="val teal" id="hdrBalance">$—</span>
+      <div class="stat-chip" id="balanceChip" title="Paper equity or connected Bitget balance" style="cursor:pointer" onclick="toggleBudgetPopover()">
+        <span class="lbl" id="balanceLabel">Paper Equity</span><span class="val teal" id="hdrBalance">$—</span>
       </div>
       <div class="stat-chip"><span class="lbl">Position</span><span class="val" id="hdrPosVal" style="color:var(--txt3)">FLAT</span></div>
-      <button class="disconnect-btn" onclick="doDisconnect()" title="Disconnect account">Disconnect</button>
+      <button class="disconnect-btn" id="accountActionBtn" onclick="handleAccountAction()" title="Connect account">Connect Account</button>
     </div>
   </header>
 
@@ -1755,11 +1846,16 @@ footer .sep{color:var(--border2)}
             <div class="pos-empty" style="grid-column:1/-1">No open position</div>
           </div>
         </div>
-        <!-- Mobile close-position button -->
-        <button class="pos-close-btn" id="posCloseBtn" disabled
-          onclick="openCloseSheet()" aria-label="Close open position">
-          ✕ &nbsp;Close Position
-        </button>
+        <div class="pos-actions" id="posActions">
+          <button class="pos-action-btn danger" id="posCloseBtn" disabled
+            onclick="openCloseSheet()" aria-label="Close open position">
+            Close Position
+          </button>
+          <button class="pos-action-btn secondary" id="cancelOrdersBtn"
+            onclick="confirmCancelOrders()" aria-label="Cancel open orders">
+            Cancel Orders
+          </button>
+        </div>
       </div>
 
       <div class="execution-help" id="executionHelp">
@@ -1796,6 +1892,50 @@ footer .sep{color:var(--border2)}
         <div class="execution-help-note" id="helpNote">
           <strong>Paper mode:</strong> Decision Log shows every AI cycle. Executed Trades shows fills only. Paper equity changes only from paper P&L, not real money.
         </div>
+        <div class="trade-mode-toggle" role="group" aria-label="Trading mode">
+          <button class="trade-mode-btn paper active" id="tradeModePaperBtn" type="button"
+            onclick="setTradeMode('paper')">Paper</button>
+          <button class="trade-mode-btn live" id="tradeModeLiveBtn" type="button"
+            onclick="setTradeMode('live')">Live Account</button>
+        </div>
+        <div class="funding-readiness" id="fundingReadiness">
+          <div class="funding-readiness-title">
+            <span>Funding & Live Readiness</span>
+            <span id="fundingStatus">Paper only</span>
+          </div>
+          <div class="funding-grid">
+            <div class="funding-chip">
+              <span class="funding-key">Funds</span>
+              <span class="funding-val wait" id="fundingFunds">Simulated paper equity</span>
+            </div>
+            <div class="funding-chip">
+              <span class="funding-key">Source</span>
+              <span class="funding-val" id="fundingSource">BitAgent paper wallet</span>
+            </div>
+            <div class="funding-chip">
+              <span class="funding-key">Custody</span>
+              <span class="funding-val pass" id="fundingCustody">User keeps funds on Bitget</span>
+            </div>
+            <div class="funding-chip">
+              <span class="funding-key">Live Gate</span>
+              <span class="funding-val wait" id="fundingGate">Connect account</span>
+            </div>
+          </div>
+          <div class="funding-note" id="fundingNote">
+            Paper mode uses simulated equity. Real users fund Bitget directly; BitAgent only reads balance after API connection.
+          </div>
+        </div>
+        <div class="execution-actions" id="sessionExecActions">
+          <button class="exec-action-btn connect" id="connectAccountActionBtn" type="button"
+            onclick="showConnectScreen()">Connect Account</button>
+          <button class="exec-action-btn secondary" id="previewOrderBtn" type="button"
+            onclick="previewSessionOrder()">Preview Order</button>
+          <button class="exec-action-btn danger" id="placeOrderBtn" type="button"
+            onclick="placeSessionOrder()">Place Live Order</button>
+        </div>
+        <div class="session-exec-log" id="sessionExecLog">
+          <span class="session-exec-muted">Connect, unlock, then preview before placing a live order.</span>
+        </div>
       </div>
 
       <div class="rules-panel" id="rulesPanel">
@@ -1815,7 +1955,7 @@ footer .sep{color:var(--border2)}
           </div>
           <div class="rule-chip">
             <span class="rule-key">Daily Cap</span>
-            <span class="rule-val" id="ruleDaily">10 opens/day</span>
+            <span class="rule-val wait" id="ruleDaily">0/10 opens</span>
           </div>
           <div class="rule-chip">
             <span class="rule-key">Order Size</span>
@@ -1933,7 +2073,19 @@ footer .sep{color:var(--border2)}
       </div>
     </div>
     <div class="settings-section">
-      <span class="settings-section-label">Evidence Center</span>
+      <span class="settings-section-label">Live Readiness</span>
+      <div class="m-status-card">
+        <div class="m-status-dot off" id="mLiveDot"></div>
+        <div class="m-status-text">
+          <span id="mLiveTxt">Locked</span>
+          &nbsp;·&nbsp; <span class="m-status-sym" id="mLiveHint">Connect account first</span>
+        </div>
+        <button class="disconnect-btn" onclick="toggleLiveUnlock()" id="mLiveBtn"
+          style="padding:4px 10px;font-size:9px">Unlock</button>
+      </div>
+    </div>
+    <div class="settings-section">
+      <span class="settings-section-label">Audit Center</span>
       <div class="evidence-card">
         <div class="evidence-row">
           <span class="evidence-key">Agent Type</span>
@@ -1944,17 +2096,67 @@ footer .sep{color:var(--border2)}
           <span class="evidence-val" id="evidenceMode">Paper</span>
         </div>
         <div class="evidence-row">
-          <span class="evidence-key">Evidence</span>
-          <span class="evidence-val">Live JSON</span>
+          <span class="evidence-key">Session Scope</span>
+          <span class="evidence-val" id="evidenceSession">Shared Agent</span>
         </div>
-        <div class="evidence-actions">
-          <a class="evidence-link" href="/api/status" target="_blank" rel="noopener">Status</a>
-          <a class="evidence-link" href="/api/decisions?limit=50" target="_blank" rel="noopener">Decisions</a>
-          <a class="evidence-link" href="/api/trades?limit=50" target="_blank" rel="noopener">Trades</a>
-          <a class="evidence-link" href="/api/evidence" target="_blank" rel="noopener">Summary</a>
+        <div class="evidence-row">
+          <span class="evidence-key">Evidence</span>
+          <span class="evidence-val" id="auditLastChecked">Ready</span>
+        </div>
+        <div class="audit-list" id="auditList">
+          <div class="audit-item" data-path="/api/status">
+            <div class="audit-meta">
+              <span class="audit-name">System Status</span>
+              <span class="audit-path">/api/status</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/status')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/status')">Copy</button>
+            </div>
+          </div>
+          <div class="audit-item" data-path="/api/decisions?limit=50">
+            <div class="audit-meta">
+              <span class="audit-name">Decision Log</span>
+              <span class="audit-path">/api/decisions?limit=50</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/decisions?limit=50')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/decisions?limit=50')">Copy</button>
+            </div>
+          </div>
+          <div class="audit-item" data-path="/api/trades?limit=50">
+            <div class="audit-meta">
+              <span class="audit-name">Executed Trades</span>
+              <span class="audit-path">/api/trades?limit=50</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/trades?limit=50')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/trades?limit=50')">Copy</button>
+            </div>
+          </div>
+          <div class="audit-item" data-path="/api/audit/evidence">
+            <div class="audit-meta">
+              <span class="audit-name">Audit Pack</span>
+              <span class="audit-path">/api/audit/evidence</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/audit/evidence')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/audit/evidence')">Copy</button>
+            </div>
+          </div>
+          <div class="audit-item" data-path="/api/audit/trades.csv">
+            <div class="audit-meta">
+              <span class="audit-name">CSV Export</span>
+              <span class="audit-path">/api/audit/trades.csv</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/audit/trades.csv')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/audit/trades.csv')">Copy</button>
+            </div>
+          </div>
         </div>
         <div class="evidence-note">
-          Use these endpoints to verify live market perception, Qwen or rules decisions, paper/live execution history, and risk controls.
+          Use Audit Center to verify live market perception, AI or rules decisions, paper/live execution history, and risk controls.
         </div>
       </div>
     </div>
@@ -2144,7 +2346,7 @@ footer .sep{color:var(--border2)}
     <label class="connect-label" for="operatorTokenQuickInput">Operator Token</label>
     <div class="operator-row">
       <input class="connect-input" id="operatorTokenQuickInput" type="password"
-        placeholder="Admin token" autocomplete="current-password">
+        placeholder="Operator token" autocomplete="current-password">
       <button class="operator-btn" type="button" onclick="saveOperatorToken('operatorTokenQuickInput')">Unlock</button>
     </div>
     <div class="operator-hint" id="operatorUnlockHint">Switching assets changes the active agent market and requires operator approval.</div>
@@ -2168,18 +2370,18 @@ footer .sep{color:var(--border2)}
           <span class="connect-brand-sub">AI Trading Risk Cockpit</span>
         </div>
       </div>
-      <div class="connect-headline">Connect Bitget For Operator Mode</div>
-      <div class="connect-desc">Paper mode uses simulated funds. Live mode can place real futures orders only when explicitly enabled and carries real loss risk.</div>
+      <div class="connect-headline">Connect Your Bitget Account</div>
+      <div class="connect-desc">Your API keys stay scoped to this browser session. Live orders require explicit unlock, preview, and confirmation.</div>
     </div>
     <div class="connect-body">
       <div class="operator-card" id="operatorCard">
         <label class="connect-label" for="operatorTokenInput">Operator Unlock</label>
         <div class="operator-row">
           <input class="connect-input" id="operatorTokenInput" type="password"
-            placeholder="Admin token" autocomplete="current-password">
+            placeholder="Operator token" autocomplete="current-password">
           <button class="operator-btn" type="button" onclick="saveOperatorToken()">Unlock</button>
         </div>
-        <div class="operator-hint">Public visitors can view live decisions. Account and execution controls require an operator token.</div>
+        <div class="operator-hint">Internal operator mode only. Public users connect their own account without this token.</div>
       </div>
       <div class="connect-field">
         <label class="connect-label" for="inputSymbol">Trading Pair</label>
@@ -2210,7 +2412,7 @@ footer .sep{color:var(--border2)}
         </span>
       </div>
       <button class="connect-btn" id="connectBtn" onclick="doConnect()">
-        Connect Operator Session
+        Connect My Account
       </button>
       <div class="connect-error" id="connectError" role="alert" aria-live="polite"></div>
     </div>
@@ -2223,58 +2425,8 @@ footer .sep{color:var(--border2)}
 </div>
 
 <script>
-/* ════════════════════════════════════════════════════════
-   SYMBOL-SWITCH BUG FIXES (applied in one pass)
-   ════════════════════════════════════════════════════════
-   FIX 1 — _currentSymbol updated IMMEDIATELY in switchSymbol()
-            so the stale-update guard in handleUpdate rejects
-            old-symbol WS messages from the moment the user taps.
-   FIX 2 — switchSymbol() now synchronous: clears UI before
-            POSTing, uses _isSwitching flag to block double-taps,
-            15 s timeout retries if no update arrives.
-   FIX 3 — formatSymbol(sym) is the single canonical formatter:
-            "DOGEUSDT" → "DOGE/USDT PERP". All label updates
-            route through updateSymbolLabels() which calls it.
-   FIX 4 — updateSymbolLabels() updates header chip, desktop
-            dropdown .sym-item active states, AND mobile
-            .m-sym-pill active states in one call.
-   FIX 5 — clearAllDisplayValues() resets price, cycle, gauge,
-            params, reasoning, exec bar, and agent log atomically.
-   FIX 6 — setAllSignalsLoading() rebuilds signal cards to
-            neutral scanning state in one call.
-   FIX 7 — handleUpdate logs discarded stale updates to console;
-            clears _isSwitching flag on first matching update.
-   FIX 8 — buildMSymGrid() now receives raw "BTCUSDT" symbol,
-            not the formatted display string — active pill was
-            always wrong before this fix.
-   ════════════════════════════════════════════════════════
-   BUG INVESTIGATION ANSWERS (2026-06-09):
-   Q1. 'update' WS message fields: type, cycle, ts, symbol,
-       signals, decision, execution, price, balance, position,
-       sim_pnl, uptime, history, risk_config
-   Q2. Does 'update' include 'symbol'? YES — "symbol": sym
-       (server.py agent_loop, line ~155, captured before cycle)
-   Q3. Frontend current-symbol variable: _currentSymbol
-   Q4. 'symbol_changed' fields: {type:"symbol_changed",symbol}
-   Q5. Signal cards wrapper: class=".signals-row", id="signalsRow"
-   ----
-   ROOT CAUSE of "SWITCHING forever":
-   init handler used `data.latest?.symbol || data.symbol`.
-   If WS reconnects mid-switch, _latest still holds the LAST
-   completed BTC cycle data → data.latest.symbol='BTCUSDT'
-   overrides data.symbol='XRPUSDT', reverting _currentSymbol
-   to BTC. Every subsequent XRP update is then discarded by
-   the stale guard. Fix: flip precedence → data.symbol first.
-   ----
-   TICKER BUG FIX: clearAllDisplayValues() now calls buildTicker
-   immediately so the ticker clears the moment the user taps a
-   new symbol, not after the WS round-trip for symbol_changed.
-   ----
-   OVERFLOW BUG FIX: .signals-row changed from repeat(6,1fr)
-   to repeat(auto-fit,minmax(160px,1fr)) so all 6 cards fit
-   without overflow on 1366px screens. Medium-screen breakpoint
-   (768-1280px) still forces 3-column layout via @media query.
-   ════════════════════════════════════════════════════════ */
+/* Symbol switching keeps a local selected symbol so stale WebSocket cycles
+   cannot overwrite the user's current market after a reconnect. */
 
 // ══════════════════════════════════════════════════════
 // INTRO SCREEN — ambient canvas + skip logic
@@ -2301,15 +2453,31 @@ const STREAMS = Array.from({length: STREAM_COUNT}, () => ({
   hue: Math.random() > 0.68 ? '158,169,255' : '18,206,174',
 }));
 
-let introRunning  = true;
+const ENTERED_PLATFORM_KEY = 'bitagent_entered_platform';
 let _introSkipped = false;
+try { _introSkipped = localStorage.getItem(ENTERED_PLATFORM_KEY) === '1'; } catch(e) {}
+let introRunning  = !_introSkipped;
 let _initPayload  = null;
 let _isConnected  = false;
 let _hasInitialSnapshot = false;
 let _authRequired = false;
+let _sessionInfo = null;
+let _sessionConnected = false;
 let _operatorToken = '';
+let _lastSessionProposal = null;
+let _sessionExecEvents = [];
+let _sessionAccountBalance = null;
+let _balanceSource = 'paper';
+let _operatorMode = false;
+let _tradeMode = 'paper';
+let _lastPaperEquity = 10000;
 
 try { _operatorToken = sessionStorage.getItem('bitagent_operator_token') || ''; } catch(e) {}
+try {
+  const params = new URLSearchParams(window.location.search);
+  _operatorMode = params.get('operator') === '1' || sessionStorage.getItem('bitagent_operator_mode') === '1';
+  if (params.get('operator') === '1') sessionStorage.setItem('bitagent_operator_mode', '1');
+} catch(e) {}
 
 async function fetchJson(url, options = {}, timeoutMs = 12000) {
   const ctrl = new AbortController();
@@ -2345,12 +2513,460 @@ function updateOperatorUI() {
   const card = document.getElementById('operatorCard');
   const input = document.getElementById('operatorTokenInput');
   const quick = document.getElementById('operatorTokenQuickInput');
-  if (card) card.classList.toggle('show', _authRequired && !_operatorToken);
+  if (card) card.classList.toggle('show', _operatorMode && _authRequired && !_operatorToken);
   if (input && _operatorToken) input.value = _operatorToken;
   if (quick && _operatorToken) quick.value = _operatorToken;
+  updateOrderActionControls();
 }
 
-function showOperatorUnlock(reason = 'This operator action requires the admin token.') {
+function updateSessionInfo(session, scope) {
+  if (session) {
+    _sessionInfo = {...session, scope: scope || session.scope || 'shared_agent'};
+    _sessionConnected = !!session.credentials_set;
+    _tradeMode = session.trade_mode === 'live' ? 'live' : 'paper';
+    const sessionPaperEquity = Number(session.paper_equity ?? session.paper_balance);
+    if (Number.isFinite(sessionPaperEquity) && sessionPaperEquity > 0) {
+      _lastPaperEquity = sessionPaperEquity;
+    }
+    if (session.account_balance != null) {
+      _sessionAccountBalance = Number(session.account_balance);
+      if (_tradeMode === 'live') updateBalance(_sessionAccountBalance, 'account');
+    } else if (!_sessionConnected) {
+      _sessionAccountBalance = null;
+      _balanceSource = 'paper';
+      updateBalanceLabel('paper');
+    }
+  }
+  const el = document.getElementById('evidenceSession');
+  const s = _sessionInfo || {};
+  if (el) {
+    const label = (s.scope || 'shared_agent').replaceAll('_', ' ');
+    el.textContent = label.replace(/\b\w/g, c => c.toUpperCase());
+  }
+  updateTradeModeUI();
+  updateLiveReadinessUI();
+  updateOrderActionControls();
+  renderHeaderBalance();
+}
+
+function updateTradeModeUI() {
+  const isLive = _tradeMode === 'live';
+  const paperBtn = document.getElementById('tradeModePaperBtn');
+  const liveBtn = document.getElementById('tradeModeLiveBtn');
+  paperBtn?.classList.toggle('active', !isLive);
+  liveBtn?.classList.toggle('active', isLive);
+  const pill = document.getElementById('modePill');
+  if (pill) {
+    pill.textContent = isLive ? 'LIVE' : 'PAPER';
+    pill.className = isLive ? 'mode-pill live' : 'mode-pill';
+  }
+  syncAccountHeaderState();
+}
+
+function syncAccountHeaderState() {
+  const connected = !!_sessionConnected || (_operatorMode && !!_operatorToken && !!_isConnected);
+  const isLive = _tradeMode === 'live';
+  const btn = document.getElementById('accountActionBtn');
+  const label = document.getElementById('balanceLabel');
+  const balance = document.getElementById('hdrBalance');
+
+  if (btn) {
+    btn.textContent = connected ? 'Disconnect' : 'Connect Account';
+    btn.title = connected ? 'Disconnect account' : 'Connect your Bitget account';
+  }
+
+  if (label) {
+    label.textContent = !isLive
+      ? 'Paper Equity'
+      : connected && _sessionAccountBalance != null
+      ? 'Bitget Balance'
+      : 'Live Balance';
+  }
+
+  if (balance && isLive && !connected) {
+    balance.textContent = '$—';
+    balance.style.color = 'var(--txt3)';
+  }
+}
+
+function renderHeaderBalance(data = {}) {
+  const el = document.getElementById('hdrBalance');
+  const label = document.getElementById('balanceLabel');
+  if (!el) return;
+
+  const paperEquity = Number(
+    data.account?.equity
+      ?? data.session?.paper_equity
+      ?? _sessionInfo?.paper_equity
+      ?? data.balance
+      ?? _lastPaperEquity
+      ?? 10000
+  );
+  if (Number.isFinite(paperEquity) && paperEquity > 0) {
+    _lastPaperEquity = paperEquity;
+  }
+
+  if (_tradeMode === 'paper') {
+    if (label) label.textContent = 'Paper Equity';
+    el.textContent = '$' + Number(_lastPaperEquity).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    el.style.color = 'var(--teal)';
+    return;
+  }
+
+  if (_sessionConnected && _sessionAccountBalance != null) {
+    if (label) label.textContent = 'Bitget Balance';
+    el.textContent = '$' + Number(_sessionAccountBalance).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    el.style.color = 'var(--teal)';
+    return;
+  }
+
+  if (label) label.textContent = 'Live Balance';
+  el.textContent = '$—';
+  el.style.color = 'var(--txt3)';
+}
+
+async function setTradeMode(mode) {
+  const next = mode === 'live' ? 'live' : 'paper';
+  if (next === _tradeMode) return;
+  _tradeMode = next;
+  updateTradeModeUI();
+  updateLiveReadinessUI();
+  try {
+    const data = await fetchJson('/api/session/mode', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode: next}),
+    }, 12000);
+    if (!data?.ok) {
+      showMToast(data?.error || 'Mode switch failed');
+      return;
+    }
+    if (data.session) updateSessionInfo(data.session, data.session.scope);
+    showMToast(next === 'live' ? 'Live Account mode selected' : 'Paper Trading mode selected');
+    renderHeaderBalance();
+  } catch(e) {
+    showMToast(e.message || 'Mode switch failed');
+  }
+}
+
+async function refreshSessionAccount(silent = true) {
+  if (!_sessionConnected || _operatorToken) return null;
+  try {
+    const data = await fetchJson('/api/session/account', {}, 15000);
+    if (data?.session) updateSessionInfo(data.session, data.session.scope);
+    if (!data?.ok) {
+      if (!silent) showMToast(data?.error || 'Could not read Bitget balance');
+      return null;
+    }
+    _sessionAccountBalance = Number(data.balance || 0);
+    if (_tradeMode === 'live') updateBalance(_sessionAccountBalance, 'account');
+    else renderHeaderBalance();
+    return data;
+  } catch(e) {
+    if (!silent) showMToast(e.message || 'Could not read Bitget balance');
+    return null;
+  }
+}
+
+function updateLiveReadinessUI() {
+  const s = _sessionInfo || {};
+  const connected = !!s.credentials_set;
+  const unlocked = !!s.live_unlocked;
+  const liveSelected = _tradeMode === 'live';
+  const dot = document.getElementById('mLiveDot');
+  const txt = document.getElementById('mLiveTxt');
+  const hint = document.getElementById('mLiveHint');
+  const btn = document.getElementById('mLiveBtn');
+  if (dot) dot.className = 'm-status-dot ' + (liveSelected && unlocked ? 'live' : 'off');
+  if (txt) txt.textContent = liveSelected && unlocked ? 'Live ready' : liveSelected ? 'Live locked' : 'Paper mode';
+  if (hint) hint.textContent = !liveSelected ? 'Simulated execution' : connected ? (unlocked ? 'Execution gated' : 'Account verified') : 'Connect account first';
+  if (btn) {
+    btn.textContent = unlocked ? 'Lock' : 'Unlock';
+    btn.disabled = !liveSelected || !connected;
+  }
+  updateTradeModeUI();
+  updateSessionExecutionUI();
+  updateFundingReadiness();
+  updateOrderActionControls();
+  syncAccountHeaderState();
+}
+
+function setFundingText(id, text, cls = '') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = `funding-val ${cls}`.trim();
+}
+
+function updateFundingReadiness(data = {}) {
+  const mode = data.risk_config?.mode || 'paper';
+  const s = _sessionInfo || {};
+  const connected = !!s.credentials_set;
+  const unlocked = !!s.live_unlocked;
+  const liveSelected = _tradeMode === 'live';
+  const sessionLive = liveSelected && connected && !_operatorToken;
+  const accountBalance = _sessionAccountBalance != null ? Number(_sessionAccountBalance) : null;
+  const paperEquity = Number(data.account?.equity || data.balance || _manualBudget || 10000);
+  const connectedAt = s.connected_at ? new Date(s.connected_at).toLocaleTimeString('en-US', {hour12:false}) : '';
+
+  const status = document.getElementById('fundingStatus');
+  const note = document.getElementById('fundingNote');
+
+  if (liveSelected) {
+    if (status) status.textContent = connected ? (unlocked ? 'Live ready' : 'Account connected') : 'Not connected';
+    setFundingText('fundingFunds', connected ? (accountBalance != null ? `$${fmt(accountBalance)} USDT` : 'Reading Bitget balance') : 'Connect Bitget account', connected && accountBalance != null ? 'pass' : 'wait');
+    setFundingText('fundingSource', connected ? 'Verified Bitget futures' : 'No account connected', connected ? 'pass' : 'wait');
+    setFundingText('fundingCustody', 'No BitAgent custody', 'pass');
+    setFundingText('fundingGate', connected ? (unlocked ? 'Preview required' : 'Risk unlock required') : 'Connect first', unlocked ? 'pass' : 'wait');
+    if (note) {
+      note.textContent = !connected
+        ? 'Live Account mode uses your own Bitget futures account. Connect API credentials before unlocking execution.'
+        : unlocked
+        ? 'Live execution still requires an order preview and exact confirmation before any Bitget order is sent.'
+        : `Bitget account verified${connectedAt ? ` at ${connectedAt}` : ''}. Funds stay on Bitget; unlock live risk only when you intend to preview a real futures order.`;
+    }
+    return;
+  }
+
+  if (status) status.textContent = mode === 'paper' ? 'Paper only' : 'Operator live';
+  setFundingText('fundingFunds', mode === 'paper' ? `$${fmt(paperEquity)} paper equity` : 'Operator account', mode === 'paper' ? 'wait' : 'pass');
+  setFundingText('fundingSource', mode === 'paper' ? 'BitAgent paper wallet' : 'Configured Bitget account', mode === 'paper' ? '' : 'pass');
+  setFundingText('fundingCustody', 'User keeps funds on Bitget', 'pass');
+  setFundingText('fundingGate', connected ? 'Session connected' : 'Connect account', connected ? 'wait' : 'wait');
+  if (note) {
+    note.textContent = mode === 'paper'
+      ? 'Paper mode uses simulated equity. Real users fund Bitget directly; BitAgent reads balance only after API connection.'
+      : 'Operator live mode can use real funds and should be handled only with a dedicated Bitget account.';
+  }
+}
+
+async function toggleLiveUnlock() {
+  if (_tradeMode !== 'live') {
+    showMToast('Switch to Live Account mode before unlocking live trading');
+    return;
+  }
+  const unlocked = !!_sessionInfo?.live_unlocked;
+  try {
+    if (unlocked) {
+      const data = await fetchJson('/api/session/live-lock', {method:'POST'}, 12000);
+      if (data?.session) updateSessionInfo(data.session, data.session.scope);
+      showMToast('Live mode locked');
+      return;
+    }
+    const phrase = prompt('Live trading can lose real money. Type I ACCEPT LIVE RISK to continue.');
+    if (!phrase) return;
+    const data = await fetchJson('/api/session/live-unlock', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({acknowledge:true, phrase}),
+    }, 12000);
+    if (!data?.ok) {
+      showMToast(data?.error || 'Live unlock failed');
+      return;
+    }
+    if (data.session) updateSessionInfo(data.session, data.session.scope);
+    showMToast('Live mode ready for this session');
+  } catch(e) {
+    showMToast(e.message || 'Live unlock failed');
+  }
+}
+
+function proposalText(proposal = {}) {
+  const dir = String(proposal.direction || 'FLAT').toUpperCase();
+  const symbol = proposal.symbol || _currentSymbol || '—';
+  const size = Number(proposal.size || 0);
+  const price = Number(proposal.entry_price || 0);
+  const conf = proposal.confidence ?? 0;
+  const sizeTxt = size > 0 ? size : '—';
+  const priceTxt = price > 0 ? '$' + fmt(price) : 'market';
+  return `${dir} ${symbol} · ${sizeTxt} @ ${priceTxt} · ${conf}%`;
+}
+
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
+
+function updateSessionExecutionUI() {
+  const s = _sessionInfo || {};
+  const connected = !!s.credentials_set;
+  const unlocked = !!s.live_unlocked;
+  const actions = document.getElementById('sessionExecActions');
+  const connectBtn = document.getElementById('connectAccountActionBtn');
+  const preview = document.getElementById('previewOrderBtn');
+  const place = document.getElementById('placeOrderBtn');
+  const liveSelected = _tradeMode === 'live';
+  const canPreview = liveSelected && connected && unlocked;
+  const proposalDir = String(_lastSessionProposal?.direction || 'FLAT').toUpperCase();
+  const canPlace = canPreview && (proposalDir === 'LONG' || proposalDir === 'SHORT');
+
+  actions?.classList.toggle('connect-needed', liveSelected && !connected);
+  if (connectBtn) connectBtn.style.display = liveSelected && !connected ? '' : 'none';
+  if (preview) {
+    preview.disabled = !canPreview;
+    preview.title = !liveSelected
+      ? 'Switch to Live Account mode before previewing a real order.'
+      : connected
+      ? unlocked ? 'Preview the current session order without placing it.' : 'Unlock live readiness first.'
+      : 'Connect your Bitget account first.';
+  }
+  if (place) {
+    place.disabled = !canPlace;
+    place.title = canPlace
+      ? 'Place the last previewed live order after confirmation.'
+      : 'Preview a LONG or SHORT order first.';
+  }
+  renderSessionExecLog();
+}
+
+function appendSessionExecEvent(kind, text, detail = '') {
+  _sessionExecEvents.unshift({
+    ts: new Date().toLocaleTimeString('en-US', {hour12:false}),
+    kind,
+    text,
+    detail,
+  });
+  _sessionExecEvents = _sessionExecEvents.slice(0, 4);
+  renderSessionExecLog();
+}
+
+function renderSessionExecLog() {
+  const log = document.getElementById('sessionExecLog');
+  if (!log) return;
+  if (!_sessionExecEvents.length) {
+    const s = _sessionInfo || {};
+    const msg = _tradeMode !== 'live'
+      ? 'Paper mode is active. Switch to Live Account to preview or place real orders.'
+      : !s.credentials_set
+      ? 'Connect a Bitget futures account before live execution.'
+      : !s.live_unlocked
+        ? 'Live readiness is locked for this session.'
+        : _lastSessionProposal
+          ? proposalText(_lastSessionProposal)
+          : 'Preview the current AI decision before placing an order.';
+    log.innerHTML = `<span class="session-exec-muted">${msg}</span>`;
+    return;
+  }
+  log.innerHTML = _sessionExecEvents.map(ev => {
+    const cls = ev.kind === 'live' ? 'live' : ev.kind === 'blocked' ? 'blocked' : '';
+    return `<div class="session-exec-entry">
+      <span class="session-exec-main">${escapeHtml(ev.ts)} · ${escapeHtml(ev.text)}${ev.detail ? `<br><span class="session-exec-muted">${escapeHtml(ev.detail)}</span>` : ''}</span>
+      <span class="session-exec-state ${cls}">${ev.kind.toUpperCase()}</span>
+    </div>`;
+  }).join('');
+}
+
+async function previewSessionOrder() {
+  if (_tradeMode !== 'live') {
+    showMToast('Switch to Live Account mode before previewing a real order');
+    return;
+  }
+  try {
+    appendSessionExecEvent('preview', 'Requesting dry-run proposal');
+    const data = await fetchJson('/api/session/execute', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({dry_run:true}),
+    }, 30000);
+    if (data.session) updateSessionInfo(data.session, data.session.scope);
+    if (!data.ok) {
+      _lastSessionProposal = data.proposal || null;
+      appendSessionExecEvent('blocked', data.error || 'Preview blocked');
+      showMToast(data.error || 'Preview blocked');
+      return;
+    }
+    _lastSessionProposal = data.proposal || null;
+    appendSessionExecEvent('preview', 'Dry-run ready', proposalText(_lastSessionProposal));
+    updateSessionExecutionUI();
+    showMToast('Order preview ready');
+  } catch(e) {
+    appendSessionExecEvent('blocked', e.name === 'AbortError' ? 'Preview timed out' : 'Preview failed');
+    showMToast(e.name === 'AbortError' ? 'Preview timed out' : (e.message || 'Preview failed'));
+  }
+}
+
+async function placeSessionOrder() {
+  if (_tradeMode !== 'live') {
+    showMToast('Switch to Live Account mode before placing a real order');
+    return;
+  }
+  if (!_lastSessionProposal) {
+    showMToast('Preview an order first');
+    return;
+  }
+  const phrase = prompt('This can place a real Bitget futures order. Type PLACE LIVE ORDER to continue.');
+  if (!phrase) return;
+  try {
+    appendSessionExecEvent('live', 'Submitting live order', proposalText(_lastSessionProposal));
+    const data = await fetchJson('/api/session/execute', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({dry_run:false, acknowledge:true, phrase}),
+    }, 45000);
+    if (data.session) updateSessionInfo(data.session, data.session.scope);
+    if (!data.ok || !data.executed) {
+      const result = data.result || {};
+      const msg = result.reason || data.error || 'Live order was not placed';
+      appendSessionExecEvent('blocked', msg, proposalText(data.proposal || _lastSessionProposal));
+      showMToast(msg);
+      return;
+    }
+    appendSessionExecEvent('live', 'Live order placed', proposalText(data.proposal || _lastSessionProposal));
+    showMToast('Live order placed');
+    loadTradeHistory();
+  } catch(e) {
+    appendSessionExecEvent('blocked', e.name === 'AbortError' ? 'Order timed out' : 'Order failed');
+    showMToast(e.name === 'AbortError' ? 'Order timed out' : (e.message || 'Order failed'));
+  }
+}
+
+function applySessionSymbolState(data) {
+  if (!data) return;
+  const state = data.state || data;
+  if (data.session) updateSessionInfo(data.session, data.scope || state.session_scope);
+  _lastSessionProposal = null;
+  _isSwitching = false;
+  clearTimeout(_switchTimeout);
+  if (state.symbol) {
+    _currentSymbol = state.symbol;
+    updateSymbolLabels(state.symbol);
+    rebuildSymbolDrop(state.symbol);
+  }
+  handleUpdate(state);
+  showMToast('Session asset selected');
+}
+
+async function requestSessionAnalysis() {
+  try {
+    const data = await fetchJson('/api/session/analyze', {method: 'POST'}, 60000);
+    if (data?.ok) {
+      applySessionSymbolState(data);
+      showMToast('Session analysis updated');
+    } else {
+      showMToast(data?.error || 'Session analysis failed');
+    }
+  } catch(e) {
+    showMToast(e.name === 'AbortError' ? 'Session analysis timed out' : 'Session analysis failed');
+    console.error('session analysis failed', e);
+  }
+}
+
+function showOperatorUnlock(reason = 'This operator action requires the operator token.') {
+  if (!_operatorMode) {
+    showMToast('This is an internal operator action. Public sessions use their own account controls.');
+    return;
+  }
   const pop = document.getElementById('operatorUnlockPop');
   const hint = document.getElementById('operatorUnlockHint');
   if (hint) hint.textContent = reason;
@@ -2373,43 +2989,80 @@ function hydrateInitialSnapshot(snapshot) {
   handleUpdate(snapshot);
 }
 
+function applyStatusSnapshot(status) {
+  if (!status) return;
+  const snapshot = status.latest || {};
+  const sessionBalance = status.session?.account_balance;
+  const data = {
+    ...snapshot,
+    balance: sessionBalance ?? status.balance ?? snapshot.balance,
+    account: status.account ?? snapshot.account,
+    position: snapshot.position,
+    risk_config: status.risk_config || snapshot.risk_config || { mode: 'paper' },
+    decision: snapshot.decision,
+    execution: snapshot.execution,
+  };
+  updateExecutionHelp(data);
+  updateRulesPanel(data);
+  syncMobileMetrics();
+}
+
 async function hydrateFromStatus() {
   try {
     const status = await fetchJson('/api/status', {}, 8000);
     _authRequired = !!status?.auth_required;
+    updateSessionInfo(status?.session, status?.session_scope);
+    _isConnected = !!(status?.creds_set || status?.session?.credentials_set);
     updateOperatorUI();
-    if (status?.symbol) {
-      _currentSymbol = status.symbol;
-      updateSymbolLabels(status.symbol);
-      rebuildSymbolDrop(status.symbol);
+    const statusSym = status?.session?.selected_symbol || status?.symbol;
+    if (statusSym) {
+      _currentSymbol = statusSym;
+      updateSymbolLabels(statusSym);
+      rebuildSymbolDrop(statusSym);
     }
+    applyStatusSnapshot(status);
+    if (status?.session?.credentials_set) refreshSessionAccount(true);
     if (status?.latest) hydrateInitialSnapshot(status.latest);
   } catch(e) {
     console.warn('Initial status hydration failed', e);
   }
 }
 
-function skipIntro() {
-  if (_introSkipped) return;
+function rememberEnteredPlatform() {
+  try { localStorage.setItem(ENTERED_PLATFORM_KEY, '1'); } catch(e) {}
+}
+
+function enterCockpit(options = {}) {
+  const persist = options.persist !== false;
+  const animate = options.animate !== false;
   _introSkipped = true;
   introRunning  = false;
+  if (persist) rememberEnteredPlatform();
 
   const screen = document.getElementById('introScreen');
-  screen.classList.add('hide');
-  setTimeout(() => {
-    if (screen.classList.contains('hide')) screen.style.display = 'none';
-  }, 950);
+  if (screen) {
+    if (animate) {
+      screen.classList.add('hide');
+      setTimeout(() => {
+        if (screen.classList.contains('hide')) screen.style.display = 'none';
+      }, 950);
+    } else {
+      screen.classList.add('hide');
+      screen.style.display = 'none';
+    }
+  }
 
   setTimeout(() => {
-    if (_initPayload && _initPayload.creds_set) {
-      hideConnectScreen();
-      document.querySelector('.live-pill')?.style.setProperty('display','');
-      hydrateInitialSnapshot(_initPayload.latest);
-      if (!_hasInitialSnapshot) hydrateFromStatus();
-    } else {
-      showConnectScreen();
-    }
-  }, 650);
+    hideConnectScreen();
+    document.querySelector('.live-pill')?.style.setProperty('display','');
+    if (_initPayload?.latest) hydrateInitialSnapshot(_initPayload.latest);
+    if (!_hasInitialSnapshot) hydrateFromStatus();
+  }, animate ? 650 : 0);
+}
+
+function skipIntro() {
+  if (_introSkipped) return;
+  enterCockpit();
 }
 
 // The intro is an actual homepage: users choose when to enter.
@@ -2459,6 +3112,7 @@ function drawIntro() {
   requestAnimationFrame(drawIntro);
 }
 drawIntro();
+if (_introSkipped) enterCockpit({persist:false, animate:false});
 
 // (skipIntro defined above drawIntro)
 
@@ -2485,7 +3139,7 @@ const WAVES = [
   { y:.82, amp:45, spd:.0006, phase:3.5, col:'rgba(246,70,93,0.025)'  },
 ];
 
-// Floating data particles — generic terms only, no fake numbers
+// Floating market terms
 const FIN_WORDS = [
   'LONG','SHORT','BUY','SELL','HOLD',
   'RSI','ATR','MACD','SMA','EMA',
@@ -2573,7 +3227,7 @@ drawBg();
 const SIG_META = {
   technical:  { label:'Technical',  icon:'◈', keys:['rsi','stoch_rsi','trend'] },
   sentiment:  { label:'Sentiment',  icon:'◉', keys:['fear_greed','long_short_ratio','funding_rate'] },
-  macro:      { label:'Macro',      icon:'◐', keys:['btc_dominance','mcap_change_24h'] },
+  macro:      { label:'Market Macro', icon:'◐', keys:['btc_dominance','mcap_change_24h'] },
   momentum:   { label:'Momentum',   icon:'◆', keys:['change_24h_pct','range_position'] },
   depth:      { label:'Mkt Depth',  icon:'◇', keys:['imbalance','spread_pct'] },
   volatility: { label:'Volatility', icon:'◎', keys:['regime','atr_pct'] },
@@ -2609,6 +3263,14 @@ function fmtMetricVal(k, v) {
   if (k === 'long_short_ratio') return String(v);
   if (typeof v === 'number')   return String(v);
   return String(v).slice(0, 14);
+}
+
+function metricLabel(k) {
+  const labels = {
+    btc_dominance: 'BTC dom market',
+    mcap_change_24h: 'Crypto mcap 24h',
+  };
+  return labels[k] || k.replace(/_/g, ' ');
 }
 
 function signalStrength(type, sig, data) {
@@ -2660,7 +3322,7 @@ function updateSignalCard(k, data) {
 
   const keys = SIG_META[k].keys;
   met.innerHTML = keys.filter(m => data[m] !== undefined).map(m =>
-    `<div class="sig-metric"><span class="mk">${m.replace(/_/g,' ')}</span>
+    `<div class="sig-metric"><span class="mk">${metricLabel(m)}</span>
      <span class="mv">${fmtMetricVal(m, data[m])}</span></div>`
   ).join('');
 
@@ -2787,6 +3449,7 @@ function updateExecution(exec) {
     const a = (exec.action || '').toUpperCase();
     const isBear = a.includes('SHORT');
     const isClose = a.includes('CLOSE');
+    const isPaper = a.includes('PAPER');
     dot.className      = 'exec-bar-dot on';
     action.className   = isBear ? 'exec-bar-action bear' : isClose ? 'exec-bar-action off' : 'exec-bar-action on';
     action.textContent = a || 'EXECUTED';
@@ -2794,7 +3457,7 @@ function updateExecution(exec) {
     void bar.offsetWidth;
     bar.classList.add('fired');
     const base = (exec.detail||'').match(/([A-Z]+)\s@/)?.[1] || 'ASSET';
-    badge.textContent       = exec.size_btc ? `${exec.size_btc} ${base}` : 'ORDER SENT';
+    badge.textContent       = exec.size_btc ? `${exec.size_btc} ${base}` : isPaper ? 'PAPER FILL' : 'ORDER SENT';
     badge.style.color       = 'var(--bull)';
     badge.style.borderColor = 'rgba(14,203,129,0.3)';
     _showCooldown(false);
@@ -2822,30 +3485,36 @@ function updateExecution(exec) {
 
 function updateExecutionHelp(data = {}) {
   const mode = data.risk_config?.mode || 'paper';
+  const liveSelected = _tradeMode === 'live';
+  const sessionLive = liveSelected && _sessionConnected && !_operatorToken;
   const decision = (data.decision?.direction || 'WAITING').toUpperCase();
   const confidence = data.decision?.confidence;
   const exec = data.execution || {};
   const pos = data.position;
   const account = data.account || {};
   const balance = Number(data.balance || 0);
+  const equity = Number(account.equity || balance || 10000);
+  if (Number.isFinite(equity) && equity > 0) _lastPaperEquity = equity;
 
   const pill = document.getElementById('modePill');
   if (pill) {
-    pill.textContent = mode === 'paper' ? 'PAPER' : 'LIVE';
-    pill.className = mode === 'paper' ? 'mode-pill' : 'mode-pill live';
+    pill.textContent = liveSelected ? 'LIVE' : 'PAPER';
+    pill.className = liveSelected ? 'mode-pill live' : 'mode-pill';
   }
 
   const wallet = document.getElementById('helpWallet');
   if (wallet) {
-    const equity = Number(account.equity || balance || 10000);
-    wallet.textContent = mode === 'paper'
-      ? `Paper equity $${fmt(equity)}`
-      : `Live $${fmt(balance)}`;
-    wallet.className = mode === 'paper' ? 'execution-help-val gold' : 'execution-help-val bull';
+    const sessionBal = _sessionAccountBalance != null ? _sessionAccountBalance : balance;
+    wallet.textContent = sessionLive
+      ? `Bitget balance $${fmt(sessionBal)}`
+      : !liveSelected
+        ? `Paper equity $${fmt(equity)}`
+        : `Live $${fmt(balance)}`;
+    wallet.className = sessionLive || liveSelected ? 'execution-help-val bull' : 'execution-help-val gold';
   }
 
   const balLbl = document.getElementById('balanceLabel');
-  if (balLbl) balLbl.textContent = mode === 'paper' ? 'Paper Equity' : 'Balance';
+  if (balLbl) balLbl.textContent = sessionLive ? 'Bitget Balance' : !liveSelected ? 'Paper Equity' : 'Balance';
 
   const dec = document.getElementById('helpDecision');
   if (dec) {
@@ -2893,12 +3562,16 @@ function updateExecutionHelp(data = {}) {
 
   const note = document.getElementById('helpNote');
   if (note) {
-    if (mode === 'paper') {
+    if (sessionLive) {
+      note.innerHTML = '<strong>Connected account:</strong> balance is read from your Bitget futures wallet. Orders still require live unlock, preview, and confirmation.';
+    } else if (!liveSelected) {
       note.innerHTML = '<strong>Paper mode:</strong> Decision Log shows every AI cycle. Executed Trades shows fills only. Paper equity changes only from paper P&L, not real money.';
     } else {
-      note.innerHTML = '<strong>Live mode:</strong> orders use a real Bitget futures account. Profit is not guaranteed and losses are possible.';
+      note.innerHTML = '<strong>Live Account mode:</strong> connect your Bitget account, unlock live risk, preview, then confirm before any real order is sent.';
     }
   }
+  updateFundingReadiness(data);
+  renderHeaderBalance(data);
 }
 
 function updateRulesPanel(data = {}) {
@@ -2909,7 +3582,13 @@ function updateRulesPanel(data = {}) {
   const min = Number(rc.confidence_min || 60);
   const dir = String(rc.decision_direction || decision.direction || 'WAITING').toUpperCase();
   const detail = String(rc.execution_detail || execution.detail || '');
-  const cooldownBlocked = !!rc.cooldown_blocked || detail.toLowerCase().includes('cooldown');
+  const detailLc = detail.toLowerCase();
+  const cooldownBlocked = !!rc.cooldown_blocked || detailLc.includes('cooldown');
+  const dailyBlocked = !!rc.daily_limit_blocked || detailLc.includes('daily limit');
+  const orderBlocked = !!rc.order_size_blocked
+    || detailLc.includes('budget too small')
+    || detailLc.includes('insufficient balance')
+    || detailLc.includes('min lot');
 
   const confEl = document.getElementById('ruleConfidence');
   if (confEl) {
@@ -2933,18 +3612,37 @@ function updateRulesPanel(data = {}) {
   }
 
   const dailyEl = document.getElementById('ruleDaily');
-  if (dailyEl) dailyEl.textContent = `${rc.max_daily || 10} opens/day`;
+  if (dailyEl) {
+    const used = Number(rc.daily_trades || 0);
+    const max = Number(rc.max_daily || 10);
+    dailyEl.textContent = dailyBlocked ? `${used}/${max} reached` : `${used}/${max} opens`;
+    dailyEl.title = dailyBlocked ? detail : `${max} opens/day`;
+    dailyEl.className = dailyBlocked ? 'rule-val wait' : 'rule-val pass';
+  }
 
   const sizeEl = document.getElementById('ruleSize');
-  if (sizeEl) sizeEl.textContent = `${rc.size_pct || 1}% equity`;
+  if (sizeEl) {
+    sizeEl.textContent = orderBlocked ? detail : `${rc.size_pct || 1}% equity`;
+    sizeEl.title = detail;
+    sizeEl.className = orderBlocked ? 'rule-val fail' : 'rule-val pass';
+  }
 
   const cycleEl = document.getElementById('ruleCycle');
   if (cycleEl) cycleEl.textContent = `${rc.loop_secs || 60}s`;
 
   const note = document.getElementById('rulesNote');
   if (note) {
+    const action = String(execution.action || '').toUpperCase();
     if (execution.executed) {
-      note.textContent = `Executed because the decision passed the strategy gates. Action: ${(execution.action || '').replaceAll('_', ' ')}.`;
+      if (action.includes('CLOSE')) {
+        note.textContent = `Position closed because the agent moved to FLAT. Action: ${action.replaceAll('_', ' ')}.`;
+      } else if (action.includes('PAPER')) {
+        note.textContent = `Paper fill recorded after the decision passed the strategy gates. Action: ${action.replaceAll('_', ' ')}.`;
+      } else {
+        note.textContent = `Live order sent after the decision passed the strategy gates. Action: ${action.replaceAll('_', ' ')}.`;
+      }
+    } else if (dir === 'FLAT' && confidence > 0 && confidence < min) {
+      note.textContent = `Skipped because confidence is below the ${min}% threshold and the agent is staying FLAT.`;
     } else if (detail) {
       note.textContent = `Skipped because: ${detail}`;
     } else {
@@ -3027,8 +3725,9 @@ async function doConnect() {
   err.classList.remove('show');
 
   const symbol = document.getElementById('inputSymbol').value;
+  const endpoint = (_operatorMode && _operatorToken) ? '/api/connect' : '/api/session/connect';
   try {
-    const data = await fetchJson('/api/connect', {
+    const data = await fetchJson(endpoint, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({api_key: key, secret_key: sec, passphrase: pass, symbol, budget}),
@@ -3036,6 +3735,7 @@ async function doConnect() {
     if (data.ok) {
       _manualBudget = budget;
       _isConnected = true;
+      if (data.session) updateSessionInfo(data.session, data.scope || data.session.scope);
       btn.setAttribute('aria-busy', 'false');
       hideConnectScreen();
       document.querySelector('.live-pill')?.style.setProperty('display','');
@@ -3044,17 +3744,19 @@ async function doConnect() {
         updateSymbolLabels(data.symbol);
         rebuildSymbolDrop(data.symbol);
       }
-      if (data.balance != null) updateBalance(data.balance);
+      if (data.balance != null) updateBalance(data.balance, data.balance_source === 'bitget_futures' ? 'account' : 'paper');
+      if (data.balance_source === 'bitget_futures') _sessionAccountBalance = Number(data.balance || 0);
       if (data.position !== undefined) updatePosition(data.position);
+      if (data.state) applySessionSymbolState(data);
       syncMobileMetrics();
-      const bal = data.balance ? `$${data.balance.toFixed(2)} USDT available` : (budget ? `$${budget.toFixed(2)} USDT budget` : '');
+      const bal = data.balance ? `$${Number(data.balance).toFixed(2)} USDT available` : (budget ? `$${budget.toFixed(2)} USDT budget` : '');
       if (bal) document.getElementById('execDetail').textContent = bal;
     } else {
       err.textContent = data.error || 'Connection failed. Check your credentials.';
       err.classList.add('show');
       btn.disabled = false;
       btn.setAttribute('aria-busy', 'false');
-      btn.textContent = 'Connect Operator Session';
+      btn.textContent = 'Connect My Account';
     }
   } catch(e) {
     err.textContent = e.name === 'AbortError'
@@ -3063,18 +3765,23 @@ async function doConnect() {
     err.classList.add('show');
     btn.disabled = false;
     btn.setAttribute('aria-busy', 'false');
-    btn.textContent = 'Connect Operator Session';
+    btn.textContent = 'Connect My Account';
   }
 }
 
 async function doDisconnect() {
+  if (!_sessionConnected && !(_operatorMode && _operatorToken && _isConnected)) {
+    showConnectScreen();
+    return;
+  }
   if (!confirm('Disconnect account? The agent will stop trading.')) return;
   let data;
+  const endpoint = (_operatorMode && _operatorToken && !_sessionConnected) ? '/api/disconnect' : '/api/session/disconnect';
   try {
-    data = await fetchJson('/api/disconnect', {method: 'POST'}, 12000);
+    data = await fetchJson(endpoint, {method: 'POST'}, 12000);
   } catch(e) {
     if (isOperatorUnlockMessage(e.message)) {
-      showOperatorUnlock('Disconnecting the operator session requires the admin token.');
+      showMToast('No account is connected in this browser session.');
     } else {
       showMToast(e.name === 'AbortError' ? 'Disconnect timed out' : 'Disconnect failed');
     }
@@ -3082,7 +3789,7 @@ async function doDisconnect() {
   }
   if (!data?.ok) {
     if (isOperatorUnlockMessage(data?.error)) {
-      showOperatorUnlock('Disconnecting the operator session requires the admin token.');
+      showMToast('No account is connected in this browser session.');
     } else {
       showMToast(data?.error || 'Disconnect failed');
     }
@@ -3091,6 +3798,11 @@ async function doDisconnect() {
   }
   _manualBudget = 0;
   _isConnected = false;
+  _sessionConnected = false;
+  _sessionAccountBalance = null;
+  _balanceSource = 'paper';
+  updateBalanceLabel('paper');
+  if (data.session) updateSessionInfo(data.session, data.scope || data.session.scope);
   if (_initPayload) _initPayload.creds_set = false;
   _hasInitialSnapshot = false;
   document.querySelector('.live-pill')?.style.setProperty('display','none');
@@ -3107,7 +3819,16 @@ async function doDisconnect() {
   document.getElementById('inputBudget').value = '';
   document.getElementById('connectBtn').disabled = false;
   document.getElementById('connectBtn').setAttribute('aria-busy', 'false');
-  document.getElementById('connectBtn').textContent = 'Connect Operator Session';
+  document.getElementById('connectBtn').textContent = 'Connect My Account';
+  syncAccountHeaderState();
+}
+
+function handleAccountAction() {
+  if (_sessionConnected || (_operatorMode && _operatorToken && _isConnected)) {
+    doDisconnect();
+  } else {
+    showConnectScreen();
+  }
 }
 
 // Populate the connect form's symbol select from _PAIRS
@@ -3353,6 +4074,11 @@ function switchSymbol(el) {
         showMToast(data.error || 'Symbol switch failed');
       }
       console.error('Symbol switch failed:', data.error);
+      return;
+    }
+    if (data.scope === 'session_preview') {
+      applySessionSymbolState(data);
+      if (data.analysis_available) requestSessionAnalysis();
     }
     // On success: stay in switching state until WS update arrives
   })
@@ -3438,30 +4164,27 @@ function connect() {
     // skipIntro() (user click or auto-timer) will read _initPayload when ready.
     if (data.type === 'init') {
       _initPayload = data;
-      _isConnected = !!data.creds_set;
+      _isConnected = !!(data.creds_set || data.session?.credentials_set);
       if ('auth_required' in data) {
         _authRequired = !!data.auth_required;
+        updateSessionInfo(data.session, data.session_scope);
         updateOperatorUI();
       }
-      if (data.creds_set) {
+      if (data.creds_set || data.session?.credentials_set) {
         hydrateInitialSnapshot(data.latest);
         if (!data.latest) hydrateFromStatus();
+        refreshSessionAccount(true);
       }
       // If user already skipped intro before WS connected, act immediately
       if (_introSkipped) {
-        if (data.creds_set) {
-          hideConnectScreen();
-          document.querySelector('.live-pill')?.style.setProperty('display','');
-          hydrateInitialSnapshot(data.latest);
-        } else {
-          showConnectScreen();
-        }
+        enterCockpit({persist:false, animate:false});
+        if (data.latest) hydrateInitialSnapshot(data.latest);
       }
       // Sync symbol: prefer data.symbol (= agent.SYMBOL, always authoritative) over
       // data.latest.symbol which may be from the last completed cycle and could be a
       // stale old symbol if the WS reconnects mid-switch. Reversing this precedence was
       // the root cause of "SWITCHING forever" after a WS reconnect during a symbol switch.
-      const initSym = data.symbol || data.latest?.symbol;
+      const initSym = data.session?.selected_symbol || data.symbol || data.latest?.symbol;
       if (initSym) {
         _currentSymbol = initSym;
         updateSymbolLabels(initSym);
@@ -3479,11 +4202,9 @@ function connect() {
         updateSymbolLabels(data.symbol);
         rebuildSymbolDrop(data.symbol);
       }
-      if (data.balance != null) updateBalance(data.balance);
+      if (data.balance != null) updateBalance(data.balance, data.balance_source === 'bitget_futures' ? 'account' : 'live');
       if ('position' in data)   updatePosition(data.position);
-      updateExecutionHelp({ balance: data.balance, position: data.position, risk_config: { mode: 'paper' } });
-      updateRulesPanel({ risk_config: { mode: 'paper' } });
-      syncMobileMetrics();
+      hydrateFromStatus();
       return;
     }
     if (data.type === 'disconnected') {
@@ -3520,10 +4241,20 @@ function connect() {
       return;
     }
 
+    if (data.type === 'session_symbol_changed') {
+      applySessionSymbolState(data);
+      return;
+    }
+
     if (data.type === 'balance_update') {
-      updateBalance(data.balance);
-      updateExecutionHelp({ balance: data.balance, risk_config: { mode: 'paper' } });
-      updateRulesPanel({ risk_config: { mode: 'paper' } });
+      if (_tradeMode === 'paper') {
+        renderHeaderBalance({balance:data.balance});
+      } else if (_sessionConnected && !_operatorToken && _sessionAccountBalance != null) {
+        updateBalance(_sessionAccountBalance, 'account');
+      } else {
+        updateBalance(data.balance, 'live');
+      }
+      hydrateFromStatus();
       return;
     }
 
@@ -3554,7 +4285,6 @@ function handleUpdate(data) {
   // Discard stale updates from a previous symbol — only if symbol field is present AND wrong.
   // Do NOT require _currentSymbol to be truthy: if it's somehow empty, let updates through.
   if (data.symbol && data.symbol !== _currentSymbol) {
-    console.log('Discarding stale update for', data.symbol, '(current:', _currentSymbol + ')');
     return;
   }
 
@@ -3574,7 +4304,13 @@ function handleUpdate(data) {
     flash(priceEl);
   }
   setEl('hdrCycle', '#' + data.cycle);
-  if (data.balance != null) updateBalance(data.balance);
+  if (_tradeMode === 'paper') {
+    renderHeaderBalance(data);
+  } else if (_sessionConnected && _sessionAccountBalance != null) {
+    updateBalance(_sessionAccountBalance, 'account');
+  } else if (data.balance != null) {
+    updateBalance(data.balance, 'live');
+  }
   if ('position' in data)   updatePosition(data.position);
   updateExecutionHelp(data);
   updateRulesPanel(data);
@@ -3627,7 +4363,7 @@ function handleUpdate(data) {
     const pct = document.getElementById('mRiskPct');
     if (pct) pct.textContent = rc.size_pct + '%';
     const cd  = document.getElementById('mRiskLev');
-    if (cd)  cd.textContent  = `${rc.max_daily} trades/day · ${rc.cooldown_secs}s cooldown`;
+    if (cd)  cd.textContent  = `${rc.daily_trades || 0}/${rc.max_daily || 10} opens · ${rc.cooldown_secs || 300}s cooldown`;
     const mMode = document.getElementById('mRiskMode');
     if (mMode && rc.mode) mMode.textContent = rc.mode === 'paper' ? 'Paper Trading' : 'Live Trading';
   }
@@ -3739,8 +4475,13 @@ function toggleBudgetPopover() {
 async function applyBudget() {
   const v = parseFloat(document.getElementById('budgetInput').value) || 0;
   document.getElementById('budgetPop').style.display = 'none';
+  await setPaperBudget(v);
+}
+
+async function setPaperBudget(v) {
+  const endpoint = (_operatorMode && _operatorToken) ? '/api/set-budget' : '/api/session/paper-budget';
   try {
-    const data = await fetchJson('/api/set-budget', {
+    const data = await fetchJson(endpoint, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({budget: v}),
@@ -3754,7 +4495,13 @@ async function applyBudget() {
       return;
     }
     _manualBudget = v;
-    updateBalance(v > 0 ? v : 0);
+    if (data.session) updateSessionInfo(data.session, data.session.scope);
+    if (data.balance != null) {
+      _lastPaperEquity = Number(data.balance) || _lastPaperEquity;
+    } else if (v > 0) {
+      _lastPaperEquity = v;
+    }
+    renderHeaderBalance(data);
     showMToast(v > 0 ? `Budget set: $${v}` : 'Budget cleared');
   } catch(e) {
     if (isOperatorUnlockMessage(e.message)) {
@@ -3782,20 +4529,49 @@ document.addEventListener('keydown', e => {
   }
 });
 
-function updateBalance(bal) {
+function updateBalanceLabel(source = _balanceSource) {
+  const lbl = document.getElementById('balanceLabel');
+  if (!lbl) return;
+  const connected = !!_sessionConnected || (_operatorMode && !!_operatorToken && !!_isConnected);
+  if (_tradeMode === 'live' && !connected) {
+    lbl.textContent = 'Live Balance';
+    return;
+  }
+  lbl.textContent = source === 'account' ? 'Bitget Balance' : source === 'live' ? 'Balance' : 'Paper Equity';
+}
+
+function updateBalance(bal, source = 'auto') {
   if (bal == null) return;
   const el = document.getElementById('hdrBalance');
   if (!el) return;
-  if (!bal || bal === 0) {
-    el.textContent = 'N/A';
+  if (source === 'auto') {
+    source = (_sessionConnected && !_operatorToken) ? 'account' : 'paper';
+  }
+  if (_tradeMode === 'paper' && source === 'account') {
+    renderHeaderBalance();
+    return;
+  }
+  if (_tradeMode === 'live' && source === 'paper' && !_sessionConnected) {
+    _balanceSource = 'live_pending';
+    updateBalanceLabel('live_pending');
+    el.textContent = '$—';
     el.style.color = 'var(--txt3)';
+    syncAccountHeaderState();
+    return;
+  }
+  _balanceSource = source;
+  updateBalanceLabel(source);
+  if (!bal || bal === 0) {
+    el.textContent = source === 'account' ? '$0.00' : 'N/A';
+    el.style.color = source === 'account' ? 'var(--teal)' : 'var(--txt3)';
   } else {
     const fmt = '$' + Number(bal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    // Show "(budget)" suffix when value comes from manual input, not live API
-    el.textContent = (_manualBudget > 0 && bal <= _manualBudget) ? fmt + ' (budget)' : fmt;
+    el.textContent = source === 'paper' && _manualBudget > 0 && bal <= _manualBudget ? fmt + ' (budget)' : fmt;
     el.style.color = 'var(--teal)';
     flash(el);
   }
+  syncAccountHeaderState();
+  if (_tradeMode === 'paper') renderHeaderBalance();
 }
 
 
@@ -3987,6 +4763,7 @@ function updatePosition(pos) {
   const rows   = document.getElementById('posRows');
   const hdrVal = document.getElementById('hdrPosVal');
   const closeBtn = document.getElementById('posCloseBtn');
+  updateOrderActionControls();
 
   if (!pos || !pos.holdSide) {
     if (badge)    { badge.className = 'pos-badge flat'; badge.textContent = 'FLAT'; }
@@ -4019,6 +4796,28 @@ function updatePosition(pos) {
   syncMobileMetrics();
 }
 
+function updateOrderActionControls() {
+  const cancelBtn = document.getElementById('cancelOrdersBtn');
+  if (!cancelBtn) return;
+  const paperMode = isPaperUiMode();
+  const canCancel = paperMode || (_operatorMode && !!_operatorToken) || _sessionConnected;
+  cancelBtn.disabled = !canCancel;
+  cancelBtn.title = paperMode && !_operatorToken && !_sessionConnected
+    ? 'Paper mode has no resting exchange orders to cancel.'
+    : canCancel
+    ? 'Cancel unfilled open orders for the selected symbol.'
+    : 'Connect an account before canceling exchange orders.';
+}
+
+function isPaperUiMode() {
+  const mode = [
+    document.getElementById('modePill')?.textContent,
+    document.getElementById('footerMode')?.textContent,
+    document.getElementById('mRiskMode')?.textContent,
+  ].join(' ').toLowerCase();
+  return mode.includes('paper');
+}
+
 function openCloseSheet() {
   if (!_posSnapshot) return;
   const pos  = _posSnapshot;
@@ -4044,18 +4843,48 @@ function closeSheet() {
 
 async function confirmClosePosition() {
   closeSheet();
+  if (!_sessionConnected && !(_operatorMode && _operatorToken)) {
+    showMToast('Shared paper feed is read-only. Connect your account to manage your own positions.');
+    return;
+  }
+  const endpoint = (_operatorMode && _operatorToken && !_sessionConnected) ? '/api/close-position' : '/api/session/close-position';
   try {
-    const data = await fetchJson('/api/close-position', {method: 'POST'}, 20000);
+    const data = await fetchJson(endpoint, {method: 'POST'}, 20000);
     if (!data.ok && isOperatorUnlockMessage(data.error)) {
-      showOperatorUnlock('Closing an open position requires the operator token.');
+      showOperatorUnlock('Closing an operator position requires the operator token.');
     } else {
       showMToast(data.ok ? 'Position closed' : (data.error || 'Close failed'));
+      if (data.position !== undefined) updatePosition(data.position);
     }
   } catch(e) {
     if (isOperatorUnlockMessage(e.message)) {
-      showOperatorUnlock('Closing an open position requires the operator token.');
+      showOperatorUnlock('Closing an operator position requires the operator token.');
     } else {
       showMToast(e.name === 'AbortError' ? 'Close request timed out' : 'Request failed');
+    }
+  }
+}
+
+async function confirmCancelOrders() {
+  const symbol = formatSymbol(_currentSymbol || 'BTCUSDT');
+  if (isPaperUiMode() && !_operatorMode && !_sessionConnected) {
+    showMToast('Paper mode has no resting exchange orders to cancel');
+    return;
+  }
+  if (!confirm(`Cancel all open orders for ${symbol}? This does not close an active position.`)) return;
+  const endpoint = (_operatorMode && _operatorToken && !_sessionConnected) ? '/api/cancel-orders' : '/api/session/cancel-orders';
+  try {
+    const data = await fetchJson(endpoint, {method: 'POST'}, 20000);
+    if (!data.ok && isOperatorUnlockMessage(data.error)) {
+      showOperatorUnlock('Canceling operator orders requires the operator token.');
+      return;
+    }
+    showMToast(data.ok ? (data.detail || 'Open orders canceled') : (data.error || data.detail || 'Cancel failed'));
+  } catch(e) {
+    if (isOperatorUnlockMessage(e.message)) {
+      showOperatorUnlock('Canceling operator orders requires the operator token.');
+    } else {
+      showMToast(e.name === 'AbortError' ? 'Cancel request timed out' : (e.message || 'Cancel failed'));
     }
   }
 }
@@ -4065,7 +4894,7 @@ async function confirmClosePosition() {
 // MOBILE: SETTINGS PANEL
 // ══════════════════════════════════════════════════════
 function populateMSettings() {
-  const connected = _isConnected || !!(_initPayload && _initPayload.creds_set);
+  const connected = _isConnected || !!(_initPayload && (_initPayload.creds_set || _initPayload.session?.credentials_set));
   const displaySym = formatSymbol(_currentSymbol);
 
   const dot  = document.getElementById('mStatusDot');
@@ -4083,6 +4912,8 @@ function populateMSettings() {
   if (mMode) mMode.textContent = mode;
   const eMode = document.getElementById('evidenceMode');
   if (eMode) eMode.textContent = mode || 'Paper';
+  updateSessionInfo();
+  updateLiveReadinessUI();
 
   const bal = parseFloat(document.getElementById('hdrBalance')?.textContent?.replace(/[^0-9.]/g,'')) || 0;
   const mBudgetInput = document.getElementById('mBudgetInput');
@@ -4116,26 +4947,7 @@ async function mSetBudget() {
   const input = document.getElementById('mBudgetInput');
   const v = parseFloat(input.value) || 0;
   input.value = '';
-  try {
-    const data = await fetchJson('/api/set-budget', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({budget:v})});
-    if (!data?.ok) {
-      if (isOperatorUnlockMessage(data?.error)) {
-        showOperatorUnlock('Changing the paper budget requires the operator token.');
-      } else {
-        showMToast(data?.error || 'Failed to set budget');
-      }
-      return;
-    }
-    _manualBudget = v;
-    updateBalance(v > 0 ? v : 0);
-    showMToast(v > 0 ? `Budget set: $${v}` : 'Budget cleared');
-  } catch(e) {
-    if (isOperatorUnlockMessage(e.message)) {
-      showOperatorUnlock('Changing the paper budget requires the operator token.');
-    } else {
-      showMToast('Failed to set budget');
-    }
-  }
+  await setPaperBudget(v);
 }
 
 
@@ -4150,6 +4962,43 @@ function showMToast(msg, dur = 2800) {
   el.textContent = msg;
   el.classList.add('show');
   _toastTimer = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+function auditUrl(path) {
+  return new URL(path, window.location.origin).toString();
+}
+
+function stampAuditChecked() {
+  const el = document.getElementById('auditLastChecked');
+  if (!el) return;
+  el.textContent = new Date().toLocaleTimeString('en-US', {hour12:false});
+}
+
+function openAuditPath(path) {
+  stampAuditChecked();
+  window.open(auditUrl(path), '_blank', 'noopener');
+}
+
+async function copyAuditPath(path) {
+  const url = auditUrl(path);
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const input = document.createElement('input');
+      input.value = url;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+    }
+    stampAuditChecked();
+    showMToast('Audit link copied');
+  } catch(e) {
+    showMToast('Could not copy link');
+  }
 }
 
 

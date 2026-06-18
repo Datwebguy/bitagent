@@ -7,3 +7,5 @@ tmp/
 tmp-*.png
 agent_log.jsonl
 data/
+test_run.py
+playbooks/

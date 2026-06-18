@@ -397,6 +397,10 @@ def _count_today_trades() -> int:
         return 0
 
 
+def get_today_trade_count() -> int:
+    return _count_today_trades()
+
+
 # ─── BALANCE ──────────────────────────────────────────────────────────────────
 _BALANCE_CANDIDATES = [
     ("/api/v3/account/assets",              {}),               # Unified Account (v3)
@@ -682,6 +686,44 @@ def place_order(side: str, trade_side: str, size: str,
     if tp and trade_side == "open":
         body["presetTakeProfitPrice"] = str(round(tp, _price_dp(tp)))
     return _safe_post("/api/v2/mix/order/place-order", body)
+
+
+def cancel_open_orders() -> dict:
+    result = {"ok": False, "action": "CANCEL_ORDERS", "detail": ""}
+    if is_paper_mode():
+        result.update({"ok": True, "detail": "paper mode has no resting exchange orders"})
+        return result
+    if not credentials_set():
+        result["detail"] = "no API key"
+        return result
+
+    candidates = []
+    if _is_unified_account:
+        candidates.append((
+            "/api/v3/trade/cancel-all-order",
+            {"category": PRODUCT, "symbol": SYMBOL},
+        ))
+    candidates.extend([
+        (
+            "/api/v2/mix/order/cancel-all-orders",
+            {"symbol": SYMBOL, "productType": PRODUCT, "marginCoin": "USDT"},
+        ),
+        (
+            "/api/v2/mix/order/cancel-all-orders",
+            {"productType": PRODUCT, "marginCoin": "USDT"},
+        ),
+    ])
+
+    last = {}
+    for path, body in candidates:
+        r = _safe_post(path, body)
+        last = r
+        if r.get("code") == "00000":
+            result.update({"ok": True, "detail": "open orders canceled", "response": r})
+            return result
+    result["detail"] = last.get("msg", f"cancel failed ({last.get('code', '?')})")
+    result["response"] = last
+    return result
 
 
 _last_exec_ts: float = 0.0
