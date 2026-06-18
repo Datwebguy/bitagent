@@ -11,6 +11,7 @@ import uvicorn
 from fastapi import Cookie, FastAPI, Header, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import agent
@@ -634,7 +635,10 @@ async def lifespan(app: FastAPI):
     _agent_task.cancel()
 
 
+FRONTEND_DIR = Path(__file__).parent / "frontend"
+
 app = FastAPI(title="BitAgent", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 _cors_origins = [
     o.strip() for o in os.getenv(
         "CORS_ORIGINS",
@@ -1432,7 +1436,7 @@ async def ws_route(ws: WebSocket):
 
 @app.get("/")
 def root(bitagent_session: str | None = Cookie(default=None)):
-    html = (Path(__file__).parent / "frontend" / "index.html").read_text(encoding="utf-8")
+    html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
     response = HTMLResponse(html, headers={"Cache-Control": "no-store"})
     _ensure_session(response, bitagent_session)
     return response

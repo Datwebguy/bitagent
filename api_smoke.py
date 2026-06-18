@@ -9,6 +9,8 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 CHECKS = (
     ("/", "html"),
+    ("/static/styles.css", "css"),
+    ("/static/app.js", "js"),
     ("/api/status", "json"),
     ("/api/evidence", "json"),
     ("/api/audit/evidence", "json"),
@@ -102,6 +104,14 @@ def check(base_url: str, path: str, kind: str, timeout: float) -> tuple[bool, st
         text = body.decode("utf-8", errors="ignore")
         if "timestamp,trading_pair,direction,price,quantity" not in text:
             return False, f"{path}: CSV header not found"
+    elif kind == "css":
+        text = body.decode("utf-8", errors="ignore")
+        if ":root" not in text or "--teal" not in text:
+            return False, f"{path}: stylesheet marker not found"
+    elif kind == "js":
+        text = body.decode("utf-8", errors="ignore")
+        if "getUiState" not in text or "rebuildConnectSelect" not in text:
+            return False, f"{path}: script marker not found"
     else:
         text = body.decode("utf-8", errors="ignore")
         if "BITAGENT" not in text:
