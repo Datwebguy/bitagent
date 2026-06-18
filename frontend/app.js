@@ -93,6 +93,31 @@ function updateTradeModeUI() {
     pill.className = isLive ? 'mode-pill live' : 'mode-pill';
   }
   syncAccountHeaderState();
+  syncModeLabels();
+}
+
+function syncModeLabels(data = {}) {
+  const ui = getUiState(data);
+  const label = ui.isLive
+    ? ui.sessionConnected
+      ? 'Live Account'
+      : 'Live Account Pending'
+    : 'Paper Trading';
+  const color = ui.isLive
+    ? ui.sessionConnected ? 'var(--bull)' : 'var(--teal)'
+    : 'var(--gold)';
+
+  const footer = document.getElementById('footerMode');
+  if (footer) {
+    footer.textContent = label;
+    footer.style.color = color;
+  }
+
+  const mobile = document.getElementById('mRiskMode');
+  if (mobile) mobile.textContent = label;
+
+  const evidence = document.getElementById('evidenceMode');
+  if (evidence) evidence.textContent = label;
 }
 
 function syncAccountHeaderState() {
@@ -514,12 +539,14 @@ function applyStatusSnapshot(status) {
   };
   updateExecutionHelp(data);
   updateRulesPanel(data);
+  syncModeLabels(data);
   syncMobileMetrics();
 }
 
 async function hydrateFromStatus() {
   try {
     const status = await fetchJson('/api/status', {}, 8000);
+    _initPayload = status || _initPayload;
     _authRequired = !!status?.auth_required;
     updateSessionInfo(status?.session, status?.session_scope);
     _isConnected = !!(status?.creds_set || status?.session?.credentials_set);
@@ -533,6 +560,7 @@ async function hydrateFromStatus() {
     applyStatusSnapshot(status);
     if (status?.session?.credentials_set) refreshSessionAccount(true);
     if (status?.latest) hydrateInitialSnapshot(status.latest);
+    if (_activeTab === 'decisions') loadDecisionHistory();
   } catch(e) {
     console.warn('Initial status hydration failed', e);
   }
@@ -1411,23 +1439,6 @@ function handleUpdate(data) {
   // Execution
   if (data.execution) {
     updateExecution(data.execution);
-    const modeEl = document.getElementById('footerMode');
-    if (modeEl) {
-      const mode = data.risk_config?.mode || 'live';
-      if (mode === 'paper') {
-        modeEl.textContent = 'Paper Trading';
-        modeEl.style.color = 'var(--gold)';
-      } else if (data.execution.detail === 'execution disabled') {
-        modeEl.textContent = 'Disabled';
-        modeEl.style.color = 'var(--txt3)';
-      } else if (data.execution.executed) {
-        modeEl.textContent = 'Live Trading';
-        modeEl.style.color = 'var(--bull)';
-      } else {
-        modeEl.textContent = 'Live (Agent Active)';
-        modeEl.style.color = 'var(--teal)';
-      }
-    }
   }
 
   // History
@@ -1443,8 +1454,7 @@ function handleUpdate(data) {
     if (pct) pct.textContent = rc.size_pct + '%';
     const cd  = document.getElementById('mRiskLev');
     if (cd)  cd.textContent  = `${rc.daily_trades || 0}/${rc.max_daily || 10} opens · ${rc.cooldown_secs || 300}s cooldown`;
-    const mMode = document.getElementById('mRiskMode');
-    if (mMode && rc.mode) mMode.textContent = rc.mode === 'paper' ? 'Paper Trading' : 'Live Trading';
+    syncModeLabels(data);
   }
 }
 
@@ -1667,7 +1677,69 @@ function showTab(tab) {
   );
   document.getElementById('logList').style.display   = tab === 'decisions' ? '' : 'none';
   document.getElementById('tradeList').style.display = tab === 'trades'    ? '' : 'none';
+  if (tab === 'decisions') loadDecisionHistory();
   if (tab === 'trades') loadTradeHistory();
+}
+
+async function loadDecisionHistory() {
+  try {
+    const decisions = await fetchJson('/api/decisions?limit=30');
+    renderDecisionHistory(decisions);
+  } catch(e) {
+    showMToast('Could not load decision history');
+    console.error('[decisions]', e);
+  }
+}
+
+function normalizeDecisionRecord(row = {}) {
+  const decision = row.decision || row;
+  const signals = row.signals || {};
+  const price = decision.entry_price
+    ?? signals.technical?.price
+    ?? signals.momentum?.price
+    ?? row.price
+    ?? 0;
+  return {
+    ts: row.ts || decision.ts || '',
+    direction: String(decision.direction || row.direction || 'FLAT').toUpperCase(),
+    confidence: Number(decision.confidence ?? row.confidence ?? 0),
+    price: Number(price || 0),
+    executed: !!row.executed,
+  };
+}
+
+function renderDecisionHistory(rows) {
+  const list = document.getElementById('logList');
+  const count = document.getElementById('tabCount');
+  if (!list) return;
+
+  if (!rows || !rows.length) {
+    list.innerHTML = `<div class="log-empty">
+      <span style="font-size:22px;opacity:.3">◇</span>
+      <span>No decision cycles recorded yet</span>
+      <span style="color:var(--txt3)">The first signal cycle usually appears within 60 seconds.</span>
+    </div>`;
+    if (count && _activeTab === 'decisions') count.textContent = '0 decisions';
+    return;
+  }
+
+  const normalized = rows.map(normalizeDecisionRecord).reverse();
+  list.innerHTML = normalized.map(h => {
+    const cls = h.direction === 'LONG' ? 'bull' : h.direction === 'SHORT' ? 'bear' : 'neutral';
+    const ts = h.ts ? new Date(h.ts).toLocaleTimeString('en-US', {hour12:false}) : '—';
+    const execMark = h.executed
+      ? `<span style="color:var(--bull);font-size:9px;font-family:var(--mono)">FILLED</span>`
+      : `<span style="color:var(--txt3);font-size:9px">SKIP</span>`;
+    return `<div class="log-item">
+      <span class="log-time">${ts}</span>
+      <span class="log-dir ${cls}">${h.direction}</span>
+      <span class="log-price">${h.price > 0 ? '$' + fmt(h.price) : '—'}</span>
+      <span class="log-conf">${h.confidence}% ${execMark}</span>
+    </div>`;
+  }).join('');
+  if (count && _activeTab === 'decisions') {
+    count.textContent = `${rows.length} decision${rows.length !== 1 ? 's' : ''}`;
+  }
 }
 
 async function loadTradeHistory() {
@@ -1686,10 +1758,17 @@ function renderTrades(trades) {
   if (!list) return;
 
   if (!trades || !trades.length) {
+    const rc = _initPayload?.risk_config || {};
+    const latest = _initPayload?.latest || {};
+    const decision = latest.decision || {};
+    const execution = latest.execution || {};
+    const detail = execution.detail || rc.execution_detail || 'No fill has passed the strategy gates yet.';
+    const confidence = Number(decision.confidence ?? rc.confidence ?? 0);
+    const min = Number(rc.confidence_min || 60);
     list.innerHTML = `<div class="log-empty">
       <span style="font-size:22px;opacity:.3">◈</span>
       <span>No executed trades yet</span>
-      <span style="color:var(--txt3)">Trades appear here after execution</span>
+      <span style="color:var(--txt3)">Latest gate: ${detail}${confidence ? ` (${confidence}% / min ${min}%)` : ''}</span>
     </div>`;
     if (count && _activeTab === 'trades') count.textContent = '0 trades';
     return;
