@@ -272,7 +272,7 @@ function updateExecutionHelp(data = {}) {
   const account = data.account || {};
   const balance = Number(data.balance || 0);
   const equity = ui.paperEquity;
-  if (Number.isFinite(equity) && equity > 0) _lastPaperEquity = equity;
+  if (Number.isFinite(equity) && equity > 0 && ui.isPaper) rememberPaperEquity(equity);
 
   const pill = document.getElementById('modePill');
   if (pill) {

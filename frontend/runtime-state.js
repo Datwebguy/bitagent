@@ -1,6 +1,7 @@
 /* Shared runtime state for BitAgent's classic browser scripts. */
 
 const ENTERED_PLATFORM_KEY = 'bitagent_entered_platform';
+const PAPER_EQUITY_KEY = 'bitagent_paper_equity';
 let _introSkipped = false;
 try { _introSkipped = localStorage.getItem(ENTERED_PLATFORM_KEY) === '1'; } catch(e) {}
 let introRunning  = !_introSkipped;
@@ -17,7 +18,7 @@ let _sessionAccountBalance = null;
 let _balanceSource = 'paper';
 let _operatorMode = false;
 let _tradeMode = 'paper';
-let _lastPaperEquity = 10000;
+let _lastPaperEquity = readStoredPaperEquity() || 10000;
 
 try { _operatorToken = sessionStorage.getItem('bitagent_operator_token') || ''; } catch(e) {}
 try {
@@ -25,6 +26,27 @@ try {
   _operatorMode = params.get('operator') === '1' || sessionStorage.getItem('bitagent_operator_mode') === '1';
   if (params.get('operator') === '1') sessionStorage.setItem('bitagent_operator_mode', '1');
 } catch(e) {}
+
+function readStoredPaperEquity() {
+  try {
+    const value = Number(localStorage.getItem(PAPER_EQUITY_KEY));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch(e) {
+    return null;
+  }
+}
+
+function rememberPaperEquity(value) {
+  const equity = Number(value);
+  if (!Number.isFinite(equity) || equity <= 0) return;
+  _lastPaperEquity = equity;
+  try { localStorage.setItem(PAPER_EQUITY_KEY, String(equity)); } catch(e) {}
+}
+
+function clearStoredPaperEquity() {
+  _lastPaperEquity = 10000;
+  try { localStorage.removeItem(PAPER_EQUITY_KEY); } catch(e) {}
+}
 
 function getUiState(data = {}) {
   const session = data.session || _sessionInfo || {};
@@ -37,9 +59,12 @@ function getUiState(data = {}) {
     ? data.balance
     : session.account_balance ?? _sessionAccountBalance;
   const accountBalance = accountBalanceRaw == null ? null : Number(accountBalanceRaw);
-  const paperRaw = data.account?.equity
-    ?? session.paper_equity
-    ?? session.paper_balance
+  const storedPaper = readStoredPaperEquity();
+  const sessionPaper = Number(session.paper_equity ?? session.paper_balance);
+  const paperRaw = (Number.isFinite(sessionPaper) && sessionPaper !== 10000 ? sessionPaper : null)
+    ?? storedPaper
+    ?? (Number.isFinite(sessionPaper) ? sessionPaper : null)
+    ?? data.account?.equity
     ?? (_tradeMode === 'paper' && data.balance_source !== 'bitget_futures' ? data.balance : null)
     ?? _lastPaperEquity
     ?? 10000;

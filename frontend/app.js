@@ -55,7 +55,9 @@ function updateSessionInfo(session, scope) {
     _tradeMode = session.trade_mode === 'live' ? 'live' : 'paper';
     const sessionPaperEquity = Number(session.paper_equity ?? session.paper_balance);
     if (Number.isFinite(sessionPaperEquity) && sessionPaperEquity > 0) {
-      _lastPaperEquity = sessionPaperEquity;
+      if (sessionPaperEquity !== 10000 || !readStoredPaperEquity()) {
+        rememberPaperEquity(sessionPaperEquity);
+      }
     }
     if (session.account_balance != null) {
       _sessionAccountBalance = Number(session.account_balance);
@@ -124,7 +126,7 @@ function renderHeaderBalance(data = {}) {
   if (!el) return;
 
   const ui = getUiState(data);
-  _lastPaperEquity = ui.paperEquity;
+  if (ui.isPaper) rememberPaperEquity(ui.paperEquity);
 
   if (ui.isPaper) {
     if (label) label.textContent = 'Paper Equity';
@@ -1573,10 +1575,10 @@ async function setPaperBudget(v) {
     }
     _manualBudget = v;
     if (data.session) updateSessionInfo(data.session, data.session.scope);
-    if (data.balance != null) {
-      _lastPaperEquity = Number(data.balance) || _lastPaperEquity;
-    } else if (v > 0) {
-      _lastPaperEquity = v;
+    if (v > 0) {
+      rememberPaperEquity(data.balance != null ? data.balance : v);
+    } else {
+      clearStoredPaperEquity();
     }
     renderHeaderBalance(data);
     showMToast(v > 0 ? `Budget set: $${v}` : 'Budget cleared');

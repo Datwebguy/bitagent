@@ -114,7 +114,7 @@ def check(base_url: str, path: str, kind: str, timeout: float) -> tuple[bool, st
     elif kind == "js":
         text = body.decode("utf-8", errors="ignore")
         script_markers = {
-            "/static/runtime-state.js": ("getUiState", "ENTERED_PLATFORM_KEY"),
+            "/static/runtime-state.js": ("getUiState", "PAPER_EQUITY_KEY", "rememberPaperEquity"),
             "/static/api-client.js": ("fetchJson", "AbortController"),
             "/static/market-rendering.js": ("buildSignalCards", "updateDecision"),
             "/static/app.js": ("rebuildConnectSelect", "connect()"),
