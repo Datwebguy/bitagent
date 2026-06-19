@@ -696,22 +696,6 @@
   </div>
 </div>
 
-<div class="operator-unlock-pop" id="operatorUnlockPop" role="dialog" aria-modal="false" aria-labelledby="operatorUnlockTitle">
-  <div class="operator-unlock-head">
-    <div class="operator-unlock-title" id="operatorUnlockTitle">Operator Unlock Required</div>
-    <button class="operator-unlock-close" type="button" onclick="hideOperatorUnlock()" aria-label="Close operator unlock">×</button>
-  </div>
-  <div class="operator-card">
-    <label class="connect-label" for="operatorTokenQuickInput">Operator Token</label>
-    <div class="operator-row">
-      <input class="connect-input" id="operatorTokenQuickInput" type="password"
-        placeholder="Operator token" autocomplete="current-password">
-      <button class="operator-btn" type="button" onclick="saveOperatorToken('operatorTokenQuickInput')">Unlock</button>
-    </div>
-    <div class="operator-hint" id="operatorUnlockHint">Switching assets changes the active agent market and requires operator approval.</div>
-  </div>
-</div>
-
 <!-- CONNECT SCREEN -->
 <div id="connectScreen" class="hide">
   <div class="connect-card">
@@ -733,15 +717,6 @@
       <div class="connect-desc">Your API keys stay scoped to this browser session. Live orders require explicit unlock, preview, and confirmation.</div>
     </div>
     <div class="connect-body">
-      <div class="operator-card" id="operatorCard">
-        <label class="connect-label" for="operatorTokenInput">Operator Unlock</label>
-        <div class="operator-row">
-          <input class="connect-input" id="operatorTokenInput" type="password"
-            placeholder="Operator token" autocomplete="current-password">
-          <button class="operator-btn" type="button" onclick="saveOperatorToken()">Unlock</button>
-        </div>
-        <div class="operator-hint">Internal operator mode only. Public users connect their own account without this token.</div>
-      </div>
       <div class="connect-field">
         <label class="connect-label" for="inputSymbol">Trading Pair</label>
         <select class="connect-input" id="inputSymbol" style="cursor:pointer">

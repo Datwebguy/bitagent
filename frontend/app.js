@@ -27,6 +27,7 @@ const STREAMS = Array.from({length: STREAM_COUNT}, () => ({
 }));
 
 function saveOperatorToken(inputId = 'operatorTokenInput') {
+  ensureOperatorUI();
   const input = document.getElementById(inputId);
   _operatorToken = (input?.value || '').trim();
   try {
@@ -38,7 +39,51 @@ function saveOperatorToken(inputId = 'operatorTokenInput') {
   showMToast(_operatorToken ? 'Operator unlocked' : 'Operator token cleared');
 }
 
+function ensureOperatorUI() {
+  if (!_operatorMode) return;
+  if (!document.getElementById('operatorUnlockPop')) {
+    const pop = document.createElement('div');
+    pop.className = 'operator-unlock-pop';
+    pop.id = 'operatorUnlockPop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-modal', 'false');
+    pop.setAttribute('aria-labelledby', 'operatorUnlockTitle');
+    pop.innerHTML = `
+      <div class="operator-unlock-head">
+        <div class="operator-unlock-title" id="operatorUnlockTitle">Operator Unlock Required</div>
+        <button class="operator-unlock-close" type="button" onclick="hideOperatorUnlock()" aria-label="Close operator unlock">×</button>
+      </div>
+      <div class="operator-card">
+        <label class="connect-label" for="operatorTokenQuickInput">Operator Token</label>
+        <div class="operator-row">
+          <input class="connect-input" id="operatorTokenQuickInput" type="password"
+            placeholder="Operator token" autocomplete="current-password">
+          <button class="operator-btn" type="button" onclick="saveOperatorToken('operatorTokenQuickInput')">Unlock</button>
+        </div>
+        <div class="operator-hint" id="operatorUnlockHint">Switching assets changes the active agent market and requires operator approval.</div>
+      </div>`;
+    document.body.appendChild(pop);
+  }
+  if (!document.getElementById('operatorCard')) {
+    const body = document.querySelector('#connectScreen .connect-body');
+    if (!body) return;
+    const card = document.createElement('div');
+    card.className = 'operator-card';
+    card.id = 'operatorCard';
+    card.innerHTML = `
+      <label class="connect-label" for="operatorTokenInput">Operator Unlock</label>
+      <div class="operator-row">
+        <input class="connect-input" id="operatorTokenInput" type="password"
+          placeholder="Operator token" autocomplete="current-password">
+        <button class="operator-btn" type="button" onclick="saveOperatorToken()">Unlock</button>
+      </div>
+      <div class="operator-hint">Internal operator mode only. Public users connect their own account without this token.</div>`;
+    body.prepend(card);
+  }
+}
+
 function updateOperatorUI() {
+  ensureOperatorUI();
   const card = document.getElementById('operatorCard');
   const input = document.getElementById('operatorTokenInput');
   const quick = document.getElementById('operatorTokenQuickInput');
@@ -509,6 +554,7 @@ function showOperatorUnlock(reason = 'This operator action requires the operator
     showMToast('This is an internal operator action. Public sessions use their own account controls.');
     return;
   }
+  ensureOperatorUI();
   const pop = document.getElementById('operatorUnlockPop');
   const hint = document.getElementById('operatorUnlockHint');
   if (hint) hint.textContent = reason;

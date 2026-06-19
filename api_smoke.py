@@ -131,6 +131,10 @@ def check(base_url: str, path: str, kind: str, timeout: float) -> tuple[bool, st
         text = body.decode("utf-8", errors="ignore")
         if "BITAGENT" not in text:
             return False, f"{path}: frontend marker not found"
+        forbidden_public_text = ("Operator Unlock", "Operator Token", "Admin token")
+        leaked = [marker for marker in forbidden_public_text if marker in text]
+        if leaked:
+            return False, f"{path}: public HTML leaked operator text {', '.join(leaked)}"
 
     size = len(body)
     return True, f"{path}: ok ({content_type or 'unknown'}, {size} bytes)"
