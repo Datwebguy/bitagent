@@ -173,6 +173,31 @@ def check_session_paper_budget(base_url: str, timeout: float) -> tuple[bool, str
     return True, "/api/session/paper-budget: ok"
 
 
+def check_fake_credentials_rejected(base_url: str, timeout: float) -> tuple[bool, str]:
+    opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    payload = {
+        "api_key": "a" * 12,
+        "secret_key": "b" * 24,
+        "passphrase": "wrong-passphrase",
+        "symbol": "BTCUSDT",
+    }
+    try:
+        status, data = fetch_json_with_cookies(opener, base_url, "/api/session/connect", timeout, payload)
+        if status != 200:
+            return False, f"/api/session/connect fake credentials: HTTP {status}"
+        if data.get("ok"):
+            return False, "/api/session/connect fake credentials: accepted invalid credentials"
+        status, data = fetch_json_with_cookies(opener, base_url, "/api/status", timeout)
+        session = data.get("session") or {}
+        if session.get("credentials_set") or data.get("session_creds_set"):
+            return False, "/api/session/connect fake credentials: session marked connected"
+    except HTTPError as exc:
+        return False, f"/api/session/connect fake credentials: HTTP {exc.code}"
+    except (URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        return False, f"/api/session/connect fake credentials: {exc}"
+    return True, "/api/session/connect fake credentials: rejected"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke check BitAgent HTTP endpoints.")
     parser.add_argument("base_url", nargs="?", default="http://127.0.0.1:8000")
@@ -186,6 +211,9 @@ def main() -> int:
         print(("PASS " if ok else "FAIL ") + message)
         failed = failed or not ok
     ok, message = check_session_paper_budget(args.base_url, args.timeout)
+    print(("PASS " if ok else "FAIL ") + message)
+    failed = failed or not ok
+    ok, message = check_fake_credentials_rejected(args.base_url, args.timeout)
     print(("PASS " if ok else "FAIL ") + message)
     failed = failed or not ok
     return 1 if failed else 0
