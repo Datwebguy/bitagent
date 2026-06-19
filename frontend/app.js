@@ -537,16 +537,29 @@ function applySessionSymbolState(data) {
 }
 
 async function requestSessionAnalysis() {
+  const label = (_currentSymbol || '').replace('USDT', '/USDT');
+  updateExecution({
+    executed: false,
+    action: 'SESSION_ANALYSIS',
+    detail: label ? `Analyzing ${label}...` : 'Analyzing selected asset...',
+  });
   try {
     const data = await fetchJson('/api/session/analyze', {method: 'POST'}, 60000);
     if (data?.ok) {
       applySessionSymbolState(data);
       showMToast('Session analysis updated');
     } else {
+      updateExecution({
+        executed: false,
+        action: 'SESSION_ANALYSIS',
+        detail: data?.error || 'Session analysis failed',
+      });
       showMToast(data?.error || 'Session analysis failed');
     }
   } catch(e) {
-    showMToast(e.name === 'AbortError' ? 'Session analysis timed out' : 'Session analysis failed');
+    const detail = e.name === 'AbortError' ? 'Session analysis timed out' : 'Session analysis failed';
+    updateExecution({executed: false, action: 'SESSION_ANALYSIS', detail});
+    showMToast(detail);
     console.error('session analysis failed', e);
   }
 }

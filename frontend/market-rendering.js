@@ -254,7 +254,7 @@ function updateExecution(exec) {
   } else {
     dot.className      = 'exec-bar-dot off';
     action.className   = 'exec-bar-action off';
-    action.textContent = 'SKIP';
+    action.textContent = (exec.action || 'SKIP').toUpperCase();
     bar.classList.remove('fired');
     badge.textContent       = '—';
     badge.style.color       = '';

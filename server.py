@@ -465,11 +465,14 @@ def _session_paper_balance(session: dict) -> float:
     return value if value > 0 else PAPER_BALANCE
 
 
-def _session_paper_account(session: dict, mark_price: float | None = None) -> dict:
+def _session_paper_account(session: dict, mark_price: float | None = None, symbol: str | None = None) -> dict:
     initial = _session_paper_balance(session)
     realized = float(session.get("paper_realized") or 0)
     pos = session.get("paper_open_position") or {}
-    mark = float(mark_price or pos.get("mark") or pos.get("entry") or 0)
+    pos_symbol = normalize_symbol(pos.get("symbol") or symbol or session.get("selected_symbol") or agent.SYMBOL)
+    selected_symbol = normalize_symbol(symbol or session.get("selected_symbol") or pos_symbol)
+    mark_source = mark_price if pos_symbol == selected_symbol else None
+    mark = float(mark_source or pos.get("mark") or pos.get("entry") or 0)
     side = str(pos.get("side") or "flat").lower()
     size = float(pos.get("size") or 0)
     entry = float(pos.get("entry") or 0)
@@ -490,6 +493,7 @@ def _session_paper_account(session: dict, mark_price: float | None = None) -> di
         "free_equity": round(free_equity, 2),
         "notional": round(notional, 4),
         "open_side": side if side in ("long", "short") else "flat",
+        "open_symbol": pos_symbol,
         "open_size": round(size, 8),
         "entry": round(entry, 8),
         "mark": round(mark, 8),
@@ -516,7 +520,7 @@ def _reset_session_paper(session: dict, budget: float | None = None):
 
 def _session_payload(session: dict) -> dict:
     paper_balance = _session_paper_balance(session)
-    paper_account = _session_paper_account(session)
+    paper_account = _session_paper_account(session, symbol=session.get("selected_symbol", agent.SYMBOL))
     payload = {
         "id": session["id"],
         "mode": session.get("mode", "shared_agent"),
@@ -544,11 +548,12 @@ def _paper_position_payload(account: dict, symbol: str, opened_at: str | None = 
     size = float(account.get("open_size") or 0)
     if side not in ("long", "short") or size <= 0:
         return None
+    pos_symbol = account.get("open_symbol") or symbol
     return {
         "holdSide": side,
         "total": str(size),
         "available": str(size),
-        "symbol": symbol,
+        "symbol": pos_symbol,
         "entryPrice": str(account.get("entry") or 0),
         "unrealisedPl": account.get("unrealized", 0),
         "openedAt": opened_at or datetime.now(timezone.utc).isoformat(),
@@ -573,7 +578,7 @@ def _session_status_snapshot(session: dict) -> dict:
         price = _quick_public_price(symbol)
         state = _session_switch_placeholder(symbol, price)
 
-    account = _session_paper_account(session, state.get("price") or None)
+    account = _session_paper_account(session, state.get("price") or None, symbol)
     trades = session.get("paper_trades") or []
     opened_at = None
     if trades:
@@ -851,6 +856,7 @@ async def agent_loop():
                         open_side = paper_account.get("open_side", "flat")
                         if open_side in ("long", "short"):
                             sess["paper_open_position"] = {
+                                "symbol": sym,
                                 "side": open_side,
                                 "size": paper_account.get("open_size", 0),
                                 "entry": paper_account.get("entry", 0),
@@ -862,6 +868,7 @@ async def agent_loop():
                         trades.append({
                             "ts": datetime.now(timezone.utc).isoformat(),
                             "action": action,
+                            "symbol": sym,
                             "side": execution.get("detail", ""),
                             "size": execution.get("size", 0),
                             "price": price,
@@ -1407,6 +1414,7 @@ def status(response: Response, bitagent_session: str | None = Cookie(default=Non
     session_account = _session_paper_account(
         session,
         session_latest.get("price") or None,
+        session_latest.get("symbol") or session.get("selected_symbol") or agent.SYMBOL,
     )
     return {
         "cycles":    _cycle,
