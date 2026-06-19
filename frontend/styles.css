@@ -382,7 +382,7 @@ header{
 
 /* ── TRADE LOG ───────────────────────────────────────── */
 .log-list{
-  flex:1;overflow-y:auto;padding:8px;
+  flex:1 1 auto;min-height:96px;overflow-y:auto;padding:8px;
   display:flex;flex-direction:column;gap:4px;
 }
 .log-list::-webkit-scrollbar{width:4px}
@@ -959,7 +959,10 @@ footer .sep{color:var(--border2)}
 /* ── POSITION WIDGET ─────────────────────────────────── */
 /* pos/history section layout within right panel */
 #posSection{flex-shrink:0}
-#historySection{flex:1;display:flex;flex-direction:column;min-height:0}
+#historySection{
+  flex:1 1 auto;display:flex;flex-direction:column;
+  min-height:180px;overflow:hidden;
+}
 
 .pos-widget{
   padding:11px 16px;border-bottom:1px solid var(--border);
@@ -1249,14 +1252,15 @@ footer .sep{color:var(--border2)}
 @media (min-width:768px){
   #tab-signals{display:block;width:100%}
   #rightPanel{
-    min-height:420px;max-height:calc(100dvh - 206px);
-    overflow-y:auto;scrollbar-width:thin;
+    height:calc(100dvh - 206px);
+    min-height:460px;max-height:none;
+    overflow:hidden;scrollbar-width:thin;
   }
   #rightPanel::-webkit-scrollbar{width:5px}
   #rightPanel::-webkit-scrollbar-track{background:transparent}
   #rightPanel::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-  #historySection{min-height:0}
-  #historySection .log-list{max-height:260px}
+  #historySection{min-height:190px}
+  #historySection .log-list{max-height:none}
 }
 
 /* Medium screens (768–1280px): 2 rows of 3 signals so nothing gets cut off */
@@ -1266,14 +1270,15 @@ footer .sep{color:var(--border2)}
   .main-row{grid-template-columns:minmax(0,1fr) 320px;padding:10px 16px}
   .decision-top{height:205px;grid-template-columns:120px minmax(0,1fr)}
   .gauge-svg{width:160px}
-  #rightPanel{max-height:none}
+  #rightPanel{height:auto;min-height:460px;overflow:visible}
+  #historySection{min-height:220px}
 }
 
 @media (max-width:980px) and (min-width:768px){
   #app{grid-template-rows:28px 64px auto auto 28px}
   .main-row{grid-template-columns:1fr}
-  #rightPanel{min-height:auto}
-  #historySection .log-list{max-height:320px}
+  #rightPanel{min-height:520px}
+  #historySection .log-list{max-height:none}
 }
 
 /* ═══════════════════════════════════════════════════════

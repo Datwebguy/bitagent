@@ -283,11 +283,18 @@ function updateExecutionHelp(data = {}) {
   const wallet = document.getElementById('helpWallet');
   if (wallet) {
     const sessionBal = ui.accountBalance != null ? ui.accountBalance : balance;
+    const free = Number(account.free_equity);
+    const used = Number(account.used_margin);
     wallet.textContent = ui.isLive && ui.sessionConnected
       ? `Bitget balance $${fmt(sessionBal)}`
       : ui.isPaper
-        ? `Paper equity $${fmt(equity)}`
+        ? Number.isFinite(used) && used > 0
+          ? `Equity $${fmt(equity)} · free $${fmt(free)}`
+          : `Paper equity $${fmt(equity)}`
         : `Live $${fmt(balance)}`;
+    wallet.title = ui.isPaper && Number.isFinite(used) && used > 0
+      ? `Used simulated margin: $${fmt(used)}. Equity changes with realized and open P&L.`
+      : '';
     wallet.className = ui.isLive ? 'execution-help-val bull' : 'execution-help-val gold';
   }
 
@@ -343,7 +350,7 @@ function updateExecutionHelp(data = {}) {
     if (ui.isLive && ui.sessionConnected) {
       note.innerHTML = '<strong>Connected account:</strong> balance is read from your Bitget futures wallet. Orders still require live unlock, preview, and confirmation.';
     } else if (ui.isPaper) {
-      note.innerHTML = '<strong>Paper mode:</strong> Decision Log shows every AI cycle. Executed Trades shows fills only. Paper equity changes only from paper P&L, not real money.';
+      note.innerHTML = '<strong>Paper mode:</strong> futures simulation keeps starting equity visible, tracks used margin/free equity, and changes equity through realized and open P&L only.';
     } else {
       note.innerHTML = '<strong>Live Account mode:</strong> connect your Bitget account, unlock live risk, preview, then confirm before any real order is sent.';
     }

@@ -465,12 +465,18 @@ def _session_paper_account(session: dict, mark_price: float | None = None) -> di
     if side in ("long", "short") and size > 0 and entry > 0 and mark > 0:
         unrealized = (mark - entry) * size if side == "long" else (entry - mark) * size
     equity = initial + realized + unrealized
+    notional = size * mark if size > 0 and mark > 0 else size * entry
+    used_margin = notional if notional > 0 else 0.0
+    free_equity = max(0.0, equity - used_margin)
     return {
         "mode": "session_paper",
         "initial": round(initial, 2),
         "realized": round(realized, 4),
         "unrealized": round(unrealized, 4),
         "equity": round(equity, 2),
+        "used_margin": round(used_margin, 4),
+        "free_equity": round(free_equity, 2),
+        "notional": round(notional, 4),
         "open_side": side if side in ("long", "short") else "flat",
         "open_size": round(size, 8),
         "entry": round(entry, 8),
@@ -519,6 +525,48 @@ def _session_payload(session: dict) -> dict:
         payload["account_balance"] = round(float(session.get("account_balance") or 0), 2)
         payload["balance_source"] = "bitget_futures"
     return payload
+
+
+def _paper_position_payload(account: dict, symbol: str, opened_at: str | None = None) -> dict | None:
+    side = str(account.get("open_side") or "flat").lower()
+    size = float(account.get("open_size") or 0)
+    if side not in ("long", "short") or size <= 0:
+        return None
+    return {
+        "holdSide": side,
+        "total": str(size),
+        "available": str(size),
+        "symbol": symbol,
+        "entryPrice": str(account.get("entry") or 0),
+        "unrealisedPl": account.get("unrealized", 0),
+        "openedAt": opened_at or datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _session_status_snapshot(session: dict) -> dict:
+    symbol = normalize_symbol(session.get("selected_symbol") or agent.SYMBOL)
+    latest = _latest if isinstance(_latest, dict) else {}
+    latest_symbol = normalize_symbol(latest.get("symbol") or agent.SYMBOL) if latest else ""
+    if latest and latest_symbol == symbol:
+        state = dict(latest)
+    elif session.get("last_analysis") and session["last_analysis"].get("symbol") == symbol:
+        state = dict(session["last_analysis"])
+    else:
+        price = _quick_public_price(symbol)
+        state = _session_switch_placeholder(symbol, price)
+
+    account = _session_paper_account(session, state.get("price") or None)
+    trades = session.get("paper_trades") or []
+    opened_at = None
+    if trades:
+        opened_at = trades[-1].get("ts") if isinstance(trades[-1], dict) else None
+    state["symbol"] = symbol
+    state["session_scope"] = "session_preview"
+    state["account"] = account
+    state["session_paper_account"] = account
+    state["position"] = _paper_position_payload(account, symbol, opened_at)
+    state["balance"] = account["equity"]
+    return state
 
 
 def _ensure_session(response: Response, session_id: str | None) -> dict:
@@ -1294,9 +1342,10 @@ async def close_session_position(
 def status(response: Response, bitagent_session: str | None = Cookie(default=None)):
     session = _ensure_session(response, bitagent_session)
     account = get_paper_account() if execution_mode() == "paper" else None
+    session_latest = _session_status_snapshot(session)
     session_account = _session_paper_account(
         session,
-        ((_latest or {}).get("price") if _latest else None),
+        session_latest.get("price") or None,
     )
     return {
         "cycles":    _cycle,
@@ -1314,9 +1363,9 @@ def status(response: Response, bitagent_session: str | None = Cookie(default=Non
         "session_paper_trades": _session_paper_trades(session, 50),
         "last_error": _last_error,
         "uptime":    int((datetime.now() - _start).total_seconds()),
-        "latest":    _latest if _latest else None,
+        "latest":    session_latest,
         "account":   account,
-        "risk_config": _risk_config((_latest or {}).get("decision"), (_latest or {}).get("execution")),
+        "risk_config": _risk_config(session_latest.get("decision"), session_latest.get("execution")),
         "endpoints": _endpoint_map(),
     }
 

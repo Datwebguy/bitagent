@@ -357,12 +357,18 @@ def get_paper_account(mark_price: float | None = None) -> dict:
         unrealized = (mark_price - pos_entry) * pos_size if pos_side == "long" else (pos_entry - mark_price) * pos_size
 
     equity = initial + realized + unrealized
+    notional = pos_size * float(mark_price or pos_entry or 0) if pos_size > 0 else 0.0
+    used_margin = notional if notional > 0 else 0.0
+    free_equity = max(0.0, equity - used_margin)
     return {
         "mode":       "paper",
         "initial":    round(initial, 2),
         "realized":   round(realized, 4),
         "unrealized": round(unrealized, 4),
         "equity":     round(equity, 2),
+        "used_margin": round(used_margin, 4),
+        "free_equity": round(free_equity, 2),
+        "notional":   round(notional, 4),
         "open_side":  pos_side or "flat",
         "open_size":  round(pos_size, 8),
         "entry":      round(pos_entry, 8),

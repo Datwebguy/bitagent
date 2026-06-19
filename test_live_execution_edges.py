@@ -16,6 +16,7 @@ class LiveExecutionEdgeTests(unittest.TestCase):
 
     def tearDown(self):
         server._sessions.clear()
+        server._latest.clear()
 
     def test_execute_requires_live_mode(self):
         self.session["credentials"] = {"api_key": "a", "secret_key": "b", "passphrase": "c"}
@@ -69,6 +70,51 @@ class LiveExecutionEdgeTests(unittest.TestCase):
         self.assertFalse(payload["executed"])
         self.assertEqual(payload["proposal"]["direction"], "SHORT")
         place_order.assert_not_called()
+
+    def test_status_uses_session_symbol_not_stale_shared_latest(self):
+        self.session["selected_symbol"] = "SOLUSDT"
+        server._latest.clear()
+        server._latest.update(
+            {
+                "type": "update",
+                "symbol": "BTCUSDT",
+                "price": 63000.0,
+                "decision": {"direction": "LONG", "confidence": 62, "entry_price": 63000.0},
+                "execution": {"executed": True, "action": "OPEN_LONG_PAPER", "detail": "stale BTC"},
+                "position": {
+                    "holdSide": "long",
+                    "symbol": "BTCUSDT",
+                    "total": "0.0016",
+                    "entryPrice": "63000",
+                },
+                "risk_config": {"mode": "paper"},
+            }
+        )
+
+        with patch.object(server, "_quick_public_price", return_value=130.0):
+            response = self.client.get("/api/status")
+
+        payload = response.json()
+        self.assertEqual(payload["session"]["selected_symbol"], "SOLUSDT")
+        self.assertEqual(payload["latest"]["symbol"], "SOLUSDT")
+        self.assertIsNone(payload["latest"]["position"])
+        self.assertNotEqual(payload["latest"]["execution"]["detail"], "stale BTC")
+
+    def test_session_paper_account_reports_used_and_free_equity(self):
+        self.session["paper_balance"] = 10000.0
+        self.session["paper_open_position"] = {
+            "side": "long",
+            "entry": 100.0,
+            "size": 2.0,
+        }
+
+        account = server._session_paper_account(self.session, mark_price=110.0)
+
+        self.assertEqual(account["notional"], 220.0)
+        self.assertEqual(account["used_margin"], 220.0)
+        self.assertEqual(account["unrealized"], 20.0)
+        self.assertEqual(account["equity"], 10020.0)
+        self.assertEqual(account["free_equity"], 9800.0)
 
     def _analysis(self, direction: str, price: float = 65000.0) -> dict:
         return {
