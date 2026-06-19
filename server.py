@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import agent
+from bitget_auth import extract_usdt, validate_credentials
 from agent import (
     get_technical_signal, get_sentiment_signal, get_momentum_signal,
     get_depth_signal, get_volatility_signal, get_macro_signal, reason_with_qwen,
@@ -28,8 +29,6 @@ from agent import (
     MIN_CONFIDENCE, MAX_SIZE_PCT, PAPER_BALANCE,
 )
 
-AUTH_ERROR_CODES = {"40001", "40002", "40003", "40004", "40005", "40031"}
-AUTH_SUCCESS_CODE = "00000"
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "").strip()
 PUBLIC_PAPER_SYMBOL_SWITCH = os.getenv("PUBLIC_PAPER_SYMBOL_SWITCH", "true").strip().lower() == "true"
 SESSION_COOKIE = "bitagent_session"
@@ -207,77 +206,8 @@ def _session_auth_post(creds: dict, path: str, body: dict) -> dict:
     return r.json()
 
 
-def _session_extract_usdt(data) -> float | None:
-    if isinstance(data, dict):
-        for nested_key in ("assetsList", "coinAssets", "assets", "list"):
-            nested = data.get(nested_key)
-            if isinstance(nested, list):
-                v = _session_extract_usdt(nested)
-                if v is not None:
-                    return v
-        coin = str(data.get("coin") or data.get("marginCoin") or data.get("asset") or "").upper()
-        if coin == "USDT" or not coin:
-            for key in ("available", "availableBalance", "usdtEquity", "equity", "balance"):
-                try:
-                    if key in data and data[key] not in ("", None):
-                        return float(data[key])
-                except Exception:
-                    pass
-    if isinstance(data, list):
-        for item in data:
-            v = _session_extract_usdt(item)
-            if v is not None:
-                return v
-    return None
-
-
-def _bitget_error_message(r: dict) -> str:
-    return str(r.get("msg") or r.get("message") or r.get("code") or "credential validation failed")
-
-
-def _is_auth_failure(r: dict) -> bool:
-    code = str(r.get("code") or "")
-    msg = _bitget_error_message(r).lower()
-    return (
-        code in AUTH_ERROR_CODES
-        or "passphrase" in msg
-        or "signature" in msg
-        or "api key" in msg
-        or "apikey" in msg
-        or "invalid key" in msg
-        or "invalid sign" in msg
-        or "sign error" in msg
-        or "permission" in msg
-        or "unauthorized" in msg
-    )
-
-
 def _session_validate_credentials(creds: dict) -> tuple[bool, float, str]:
-    candidates = [
-        ("/api/v3/account/assets", {}),
-        ("/api/v2/mix/account/accounts", {"productType": agent.PRODUCT}),
-        ("/api/v2/account/all-account-balance", {"coin": "USDT"}),
-        ("/api/v2/spot/account/assets", {"coin": "USDT"}),
-    ]
-    last_error = "No private Bitget account endpoint accepted these credentials."
-    for path, params in candidates:
-        try:
-            r = _session_auth_get_raw(
-                creds["api_key"], creds["secret_key"], creds["passphrase"],
-                path, params,
-            )
-        except Exception as e:
-            last_error = str(e)
-            continue
-
-        code = str(r.get("code") or "")
-        if code == AUTH_SUCCESS_CODE:
-            balance = _session_extract_usdt(r.get("data"))
-            return True, max(0.0, float(balance or 0)), ""
-        if _is_auth_failure(r):
-            return False, 0.0, f"Invalid Bitget API credentials: {_bitget_error_message(r)}"
-        last_error = f"{path}: {_bitget_error_message(r)}"
-    return False, 0.0, f"Could not verify Bitget credentials: {last_error}"
+    return validate_credentials(creds, _session_auth_get_raw, agent.PRODUCT)
 
 
 def _session_futures_balance(creds: dict) -> float:
@@ -294,7 +224,7 @@ def _session_futures_balance(creds: dict) -> float:
                 path, params,
             )
             if r.get("code") == "00000":
-                v = _session_extract_usdt(r.get("data"))
+                v = extract_usdt(r.get("data"))
                 if v is not None:
                     return max(0.0, float(v))
         except Exception:
