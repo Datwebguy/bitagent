@@ -29,7 +29,7 @@ from agent import (
 )
 
 AUTH_ERROR_CODES = {"40001", "40002", "40003", "40004", "40005", "40031"}
-AUTH_PROBE_OK_CODES = {"00000", "40404", "40085"}
+AUTH_SUCCESS_CODE = "00000"
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "").strip()
 PUBLIC_PAPER_SYMBOL_SWITCH = os.getenv("PUBLIC_PAPER_SYMBOL_SWITCH", "true").strip().lower() == "true"
 SESSION_COOKIE = "bitagent_session"
@@ -229,6 +229,55 @@ def _session_extract_usdt(data) -> float | None:
             if v is not None:
                 return v
     return None
+
+
+def _bitget_error_message(r: dict) -> str:
+    return str(r.get("msg") or r.get("message") or r.get("code") or "credential validation failed")
+
+
+def _is_auth_failure(r: dict) -> bool:
+    code = str(r.get("code") or "")
+    msg = _bitget_error_message(r).lower()
+    return (
+        code in AUTH_ERROR_CODES
+        or "passphrase" in msg
+        or "signature" in msg
+        or "api key" in msg
+        or "apikey" in msg
+        or "invalid key" in msg
+        or "invalid sign" in msg
+        or "sign error" in msg
+        or "permission" in msg
+        or "unauthorized" in msg
+    )
+
+
+def _session_validate_credentials(creds: dict) -> tuple[bool, float, str]:
+    candidates = [
+        ("/api/v3/account/assets", {}),
+        ("/api/v2/mix/account/accounts", {"productType": agent.PRODUCT}),
+        ("/api/v2/account/all-account-balance", {"coin": "USDT"}),
+        ("/api/v2/spot/account/assets", {"coin": "USDT"}),
+    ]
+    last_error = "No private Bitget account endpoint accepted these credentials."
+    for path, params in candidates:
+        try:
+            r = _session_auth_get_raw(
+                creds["api_key"], creds["secret_key"], creds["passphrase"],
+                path, params,
+            )
+        except Exception as e:
+            last_error = str(e)
+            continue
+
+        code = str(r.get("code") or "")
+        if code == AUTH_SUCCESS_CODE:
+            balance = _session_extract_usdt(r.get("data"))
+            return True, max(0.0, float(balance or 0)), ""
+        if _is_auth_failure(r):
+            return False, 0.0, f"Invalid Bitget API credentials: {_bitget_error_message(r)}"
+        last_error = f"{path}: {_bitget_error_message(r)}"
+    return False, 0.0, f"Could not verify Bitget credentials: {last_error}"
 
 
 def _session_futures_balance(creds: dict) -> float:
@@ -887,27 +936,28 @@ async def connect(req: ConnectRequest, x_admin_token: str | None = Header(defaul
     except ValueError as e:
         return {"ok": False, "error": str(e)}
 
-    set_symbol(sym)
-    set_credentials(req.api_key.strip(), req.secret_key.strip(), req.passphrase.strip())
-    if req.budget > 0:
-        set_manual_balance(req.budget)
+    api_key = req.api_key.strip()
+    secret_key = req.secret_key.strip()
+    passphrase = req.passphrase.strip()
+    temp_creds = {"api_key": api_key, "secret_key": secret_key, "passphrase": passphrase}
 
     loop = asyncio.get_running_loop()
-
-    # Always probe auth — budget > 0 used to skip this, allowing bad credentials through
     try:
-        r    = await loop.run_in_executor(None, lambda: agent._auth_get_raw(
-                   "/api/v2/spot/account/assets", {"coin": "USDT"}))
-        code = r.get("code", "")
-        # Auth error codes indicate bad credentials; 40404/40085 = valid key, wrong endpoint
-        if code not in AUTH_PROBE_OK_CODES:
-            set_credentials("", "", "")
-            return {"ok": False, "error": f"Invalid API credentials: {r.get('msg') or code}"}
+        ok, balance, error = await asyncio.wait_for(
+            loop.run_in_executor(_executor, _session_validate_credentials, temp_creds),
+            timeout=SESSION_AUTH_TIMEOUT + 4,
+        )
     except Exception as e:
         set_credentials("", "", "")
         return {"ok": False, "error": f"Could not reach Bitget: {e}"}
+    if not ok:
+        set_credentials("", "", "")
+        return {"ok": False, "error": error}
 
-    balance = await loop.run_in_executor(None, get_futures_balance)
+    set_symbol(sym)
+    set_credentials(api_key, secret_key, passphrase)
+    if req.budget > 0:
+        set_manual_balance(req.budget)
     pos     = await loop.run_in_executor(None, get_open_position)
     await _broadcast({"type": "connected", "balance": balance, "symbol": sym, "position": pos})
     return {"ok": True, "balance": balance, "symbol": sym, "position": pos}
@@ -934,25 +984,16 @@ async def session_connect(
     secret_key = req.secret_key.strip()
     passphrase = req.passphrase.strip()
     loop = asyncio.get_running_loop()
-    try:
-        r = await asyncio.wait_for(loop.run_in_executor(None, lambda: _session_auth_get_raw(
-            api_key, secret_key, passphrase,
-            "/api/v2/spot/account/assets", {"coin": "USDT"},
-        )), timeout=SESSION_AUTH_TIMEOUT + 2)
-        code = r.get("code", "")
-        if code not in AUTH_PROBE_OK_CODES:
-            return {"ok": False, "error": f"Invalid API credentials: {r.get('msg') or code}"}
-    except Exception as e:
-        return {"ok": False, "error": f"Could not reach Bitget: {e}"}
-
     temp_creds = {"api_key": api_key, "secret_key": secret_key, "passphrase": passphrase}
     try:
-        futures_balance = await asyncio.wait_for(
-            loop.run_in_executor(_executor, _session_futures_balance, temp_creds),
+        ok, futures_balance, error = await asyncio.wait_for(
+            loop.run_in_executor(_executor, _session_validate_credentials, temp_creds),
             timeout=SESSION_AUTH_TIMEOUT + 4,
         )
     except Exception as e:
-        return {"ok": False, "error": f"Credentials verified, but futures USDT balance could not be read: {e}"}
+        return {"ok": False, "error": f"Could not reach Bitget: {e}"}
+    if not ok:
+        return {"ok": False, "error": error}
 
     session["selected_symbol"] = sym
     session["account_balance"] = float(futures_balance)
