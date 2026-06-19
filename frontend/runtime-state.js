@@ -6,6 +6,7 @@ let _introSkipped = false;
 try { _introSkipped = localStorage.getItem(ENTERED_PLATFORM_KEY) === '1'; } catch(e) {}
 let introRunning  = !_introSkipped;
 let _initPayload  = null;
+let _isInitPayload = false;
 let _isConnected  = false;
 let _hasInitialSnapshot = false;
 let _authRequired = false;

@@ -278,6 +278,24 @@ def _session_place_order(creds: dict, symbol: str, decision: dict, balance: floa
         size = min_lot
     body = _session_order_body(symbol, direction, size, decision)
     r = _session_auth_post(creds, "/api/v2/mix/order/place-order", body)
+    if r.get("code") == "40085":
+        side = "buy" if direction == "LONG" else "sell"
+        pos_side = "long" if direction == "LONG" else "short"
+        v3_body = {
+            "category": agent.PRODUCT,
+            "symbol": symbol,
+            "qty": str(size),
+            "side": side,
+            "orderType": "market",
+            "posSide": pos_side,
+        }
+        sl = float(decision.get("stop_loss") or 0)
+        tp = float(decision.get("take_profit") or 0)
+        if sl > 0:
+            v3_body["stopLossPrice"] = str(round(sl, agent._price_dp(sl)))
+        if tp > 0:
+            v3_body["takeProfitPrice"] = str(round(tp, agent._price_dp(tp)))
+        r = _session_auth_post(creds, "/api/v3/trade/place-order", v3_body)
     if r.get("code") == "00000":
         order_id = (r.get("data") or {}).get("orderId", "")
         return {
@@ -825,6 +843,31 @@ async def agent_loop():
             price     = signals["technical"]["price"]
             paper_account = await loop.run_in_executor(_executor, get_paper_account, price) if execution_mode() == "paper" else None
             _balance  = paper_account["equity"] if paper_account else await loop.run_in_executor(_executor, get_futures_balance)
+            if execution.get("executed") and paper_account:
+                action = execution.get("action", "")
+                for sid, sess in list(_sessions.items()):
+                    if sess.get("trade_mode", "paper") == "paper":
+                        sess["paper_realized"] = paper_account.get("realized", 0.0)
+                        open_side = paper_account.get("open_side", "flat")
+                        if open_side in ("long", "short"):
+                            sess["paper_open_position"] = {
+                                "side": open_side,
+                                "size": paper_account.get("open_size", 0),
+                                "entry": paper_account.get("entry", 0),
+                                "mark": paper_account.get("mark", 0),
+                            }
+                        else:
+                            sess["paper_open_position"] = None
+                        trades = sess.setdefault("paper_trades", [])
+                        trades.append({
+                            "ts": datetime.now(timezone.utc).isoformat(),
+                            "action": action,
+                            "side": execution.get("detail", ""),
+                            "size": execution.get("size", 0),
+                            "price": price,
+                        })
+                        sess["paper_trades"] = trades[-200:]
+                        _persist_session(sess)
 
             # Session/Paper P&L. In paper mode this is account return, not a raw signal move.
             if paper_account and paper_account["initial"] > 0:

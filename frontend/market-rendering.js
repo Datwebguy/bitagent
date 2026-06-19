@@ -243,7 +243,7 @@ function updateExecution(exec) {
     void bar.offsetWidth;
     bar.classList.add('fired');
     const base = (exec.detail||'').match(/([A-Z]+)\s@/)?.[1] || 'ASSET';
-    badge.textContent       = exec.size_btc ? `${exec.size_btc} ${base}` : isPaper ? 'PAPER FILL' : 'ORDER SENT';
+    badge.textContent       = exec.size ? `${exec.size} ${base}` : isPaper ? 'PAPER FILL' : 'ORDER SENT';
     badge.style.color       = 'var(--bull)';
     badge.style.borderColor = 'rgba(14,203,129,0.3)';
     _showCooldown(false);
@@ -261,7 +261,12 @@ function updateExecution(exec) {
     badge.style.borderColor = '';
 
     if (isCooldown) {
-      startCooldownDisplay(detail);
+      if (!_isInitPayload) {
+        startCooldownDisplay(detail);
+      } else {
+        _showCooldown(false);
+        if (detNorm) detNorm.textContent = detail;
+      }
     } else {
       _showCooldown(false);
       if (detNorm) detNorm.textContent = detail;

@@ -522,7 +522,9 @@ function applySessionSymbolState(data) {
   if (!data) return;
   const state = data.state || data;
   if (data.session) updateSessionInfo(data.session, data.scope || state.session_scope);
-  _lastSessionProposal = null;
+  if (!state.symbol || state.symbol !== _currentSymbol) {
+    _lastSessionProposal = null;
+  }
   _isSwitching = false;
   clearTimeout(_switchTimeout);
   if (state.symbol) {
@@ -648,7 +650,14 @@ function enterCockpit(options = {}) {
   setTimeout(() => {
     hideConnectScreen();
     document.querySelector('.live-pill')?.style.setProperty('display','');
-    if (_initPayload?.latest) hydrateInitialSnapshot(_initPayload.latest);
+    if (_initPayload?.latest) {
+      _isInitPayload = true;
+      try {
+        hydrateInitialSnapshot(_initPayload.latest);
+      } finally {
+        _isInitPayload = false;
+      }
+    }
     if (!_hasInitialSnapshot) hydrateFromStatus();
   }, animate ? 650 : 0);
 }
@@ -875,6 +884,7 @@ function hideConnectScreen() {
 
 async function doConnect() {
   const btn    = document.getElementById('connectBtn');
+  if (btn.disabled) return;
   const err    = document.getElementById('connectError');
   const key    = document.getElementById('inputApiKey').value.trim();
   const sec    = document.getElementById('inputSecretKey').value.trim();
@@ -1343,14 +1353,26 @@ function connect() {
         updateOperatorUI();
       }
       if (data.creds_set || data.session?.credentials_set) {
-        hydrateInitialSnapshot(data.latest);
+        _isInitPayload = true;
+        try {
+          hydrateInitialSnapshot(data.latest);
+        } finally {
+          _isInitPayload = false;
+        }
         if (!data.latest) hydrateFromStatus();
         refreshSessionAccount(true);
       }
       // If user already skipped intro before WS connected, act immediately
       if (_introSkipped) {
         enterCockpit({persist:false, animate:false});
-        if (data.latest) hydrateInitialSnapshot(data.latest);
+        if (data.latest) {
+          _isInitPayload = true;
+          try {
+            hydrateInitialSnapshot(data.latest);
+          } finally {
+            _isInitPayload = false;
+          }
+        }
       }
       // Sync symbol: prefer data.symbol (= agent.SYMBOL, always authoritative) over
       // data.latest.symbol which may be from the last completed cycle and could be a
