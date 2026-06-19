@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import agent
+import session_store
 from bitget_auth import extract_usdt, validate_credentials
 from agent import (
     get_technical_signal, get_sentiment_signal, get_momentum_signal,
@@ -426,20 +427,22 @@ def _new_session_id() -> str:
 
 def _get_session(session_id: str) -> dict:
     now = datetime.now(timezone.utc).isoformat()
-    session = _sessions.setdefault(session_id, {
-        "id": session_id,
-        "created_at": now,
-        "last_seen": now,
-        "mode": "shared_agent",
-        "trade_mode": "paper",
-        "paper_balance": PAPER_BALANCE,
-        "paper_realized": 0.0,
-        "paper_open_position": None,
-        "paper_trades": [],
-        "selected_symbol": agent.SYMBOL,
-    })
+    session = _sessions.get(session_id)
+    if session is None:
+        session = session_store.default_store.load(session_id, agent.SYMBOL, PAPER_BALANCE)
+    if session is None:
+        session = session_store.default_session(session_id, agent.SYMBOL, PAPER_BALANCE)
+    _sessions[session_id] = session
     session["last_seen"] = now
+    _persist_session(session)
     return session
+
+
+def _persist_session(session: dict):
+    try:
+        session_store.default_store.save(session)
+    except Exception as e:
+        print(f"[session-store] save failed: {e}")
 
 
 def _session_paper_balance(session: dict) -> float:
@@ -490,6 +493,7 @@ def _reset_session_paper(session: dict, budget: float | None = None):
     session["paper_realized"] = 0.0
     session["paper_open_position"] = None
     session["paper_trades"] = []
+    _persist_session(session)
 
 
 def _session_payload(session: dict) -> dict:
@@ -518,7 +522,7 @@ def _session_payload(session: dict) -> dict:
 
 
 def _ensure_session(response: Response, session_id: str | None) -> dict:
-    sid = session_id if session_id in _sessions else _new_session_id()
+    sid = session_id or _new_session_id()
     session = _get_session(sid)
     response.set_cookie(
         SESSION_COOKIE,
@@ -930,6 +934,7 @@ async def session_connect(
     if req.budget > 0:
         session["paper_balance"] = float(req.budget)
     _store_session_credentials(session, api_key, secret_key, passphrase)
+    _persist_session(session)
     price = await loop.run_in_executor(_executor, _quick_public_price, sym)
     state = _session_switch_placeholder(sym, price)
     state["execution"] = {
@@ -975,6 +980,7 @@ async def session_disconnect(
 ):
     session = _ensure_session(response, bitagent_session)
     _clear_session_credentials(session)
+    _persist_session(session)
     return {"ok": True, "session": _session_payload(session)}
 
 
@@ -991,6 +997,7 @@ async def session_live_unlock(
         return {"ok": False, "error": "Live unlock requires explicit risk acknowledgement."}
     session["live_unlocked"] = True
     session["mode"] = "live_ready"
+    _persist_session(session)
     return {
         "ok": True,
         "session": _session_payload(session),
@@ -1007,6 +1014,7 @@ async def session_live_lock(
     session["live_unlocked"] = False
     if session.get("credentials"):
         session["mode"] = "session_connected"
+    _persist_session(session)
     return {"ok": True, "session": _session_payload(session)}
 
 
@@ -1023,6 +1031,7 @@ async def session_mode(
     session["trade_mode"] = mode
     if mode == "paper":
         session["live_unlocked"] = False
+    _persist_session(session)
     return {"ok": True, "mode": mode, "session": _session_payload(session)}
 
 
@@ -1041,6 +1050,7 @@ async def session_paper_budget(
     _reset_session_paper(session, budget)
     session["trade_mode"] = "paper"
     session["live_unlocked"] = False
+    _persist_session(session)
     payload = _session_payload(session)
     return {
         "ok": True,
@@ -1061,6 +1071,7 @@ async def session_paper_reset(
     _reset_session_paper(session, budget if budget > 0 else None)
     session["trade_mode"] = "paper"
     session["live_unlocked"] = False
+    _persist_session(session)
     payload = _session_payload(session)
     return {
         "ok": True,
@@ -1129,6 +1140,7 @@ async def switch_symbol_route(
     is_shared_switch = _admin_token_valid(x_admin_token) or _symbol_switch_requires_auth()
     if not is_shared_switch:
         session["selected_symbol"] = sym
+        _persist_session(session)
         loop = asyncio.get_running_loop()
         price = await loop.run_in_executor(_executor, _quick_public_price, sym)
         placeholder = _session_switch_placeholder(sym, price)
@@ -1154,6 +1166,7 @@ async def switch_symbol_route(
                 "error": f"Close the open {pos_symbol} position before switching assets.",
             }
     session["selected_symbol"] = sym
+    _persist_session(session)
     set_symbol(sym)
     _cycle = 0
     _sim_pnl = 0.0
