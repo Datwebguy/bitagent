@@ -254,10 +254,15 @@ def _log_trade(action: str, side: str, size: float, price: float,
 
 def get_trade_history(limit: int = 50) -> list:
     try:
+        try:
+            limit = max(1, min(int(limit), 500))
+        except (TypeError, ValueError):
+            limit = 50
+        row_limit = max(limit * 3, 150)
         con  = sqlite3.connect(TRADES_DB)
         rows = con.execute(
             "SELECT ts,symbol,action,side,size,price,order_id,confidence,detail "
-            "FROM trades ORDER BY id ASC",
+            f"FROM trades ORDER BY id DESC LIMIT {row_limit}",
         ).fetchall()
         con.close()
         keys = ["ts", "symbol", "action", "side", "size",
@@ -294,7 +299,7 @@ def get_trade_history(limit: int = 50) -> list:
                 else:
                     item["audit"] = "Close fill recorded; matching open was not found in current journal window."
             out.append(item)
-        return list(reversed(out))[:limit]
+        return out[:limit]
     except Exception:
         return []
 
@@ -348,7 +353,8 @@ def get_paper_account(mark_price: float | None = None) -> dict:
                 "/api/v2/mix/market/ticker",
                 {"symbol": SYMBOL, "productType": PRODUCT},
             )
-            mark_price = float(ticker[0].get("lastPr", 0) or 0)
+            ticker_item = ticker[0] if isinstance(ticker, list) and ticker else (ticker if isinstance(ticker, dict) else {})
+            mark_price = float(ticker_item.get("lastPr", 0) or 0)
         except Exception:
             mark_price = 0.0
 
@@ -446,7 +452,7 @@ def _extract_usdt(data) -> float | None:
                     return float(v)
                 except (ValueError, TypeError):
                     continue
-        return float(data.get("available") or 0)
+        return None
     if isinstance(data, list):
         for item in data:
             coin = (item.get("coin") or item.get("currency") or "").upper()
@@ -529,17 +535,19 @@ def _load_position_from_disk() -> dict | None:
 def _recover_paper_position_from_journal() -> dict | None:
     try:
         con = sqlite3.connect(TRADES_DB)
-        row = con.execute(
+        rows = con.execute(
             "SELECT ts,action,side,size,price,order_id FROM trades "
             "WHERE symbol = ? AND action LIKE '%_PAPER' "
-            "ORDER BY id DESC LIMIT 1",
+            "ORDER BY id DESC LIMIT 2",
             (SYMBOL,),
-        ).fetchone()
+        ).fetchall()
         con.close()
-        if not row:
+        if not rows:
             return None
-        ts, action, side, size, price, order_id = row
-        if not str(action).startswith("OPEN_") or float(size or 0) <= 0:
+        ts, action, side, size, price, order_id = rows[0]
+        if str(action).upper().startswith("CLOSE_"):
+            return None
+        if not str(action).upper().startswith("OPEN_") or float(size or 0) <= 0:
             return None
         pos = {
             "holdSide":   side,
@@ -733,11 +741,16 @@ def cancel_open_orders() -> dict:
 
 
 _last_exec_ts: float = 0.0
+_session_analysis_symbol: str | None = None
 
 
 def execute_trade(decision: dict, signals: dict) -> dict:
     global _last_exec_ts
     result = {"executed": False, "action": "SKIP", "detail": ""}
+
+    if _session_analysis_symbol and _session_analysis_symbol != SYMBOL:
+        result["detail"] = "symbol analysis in progress — skipping execution"
+        return result
 
     if not EXEC_ENABLED:
         result["detail"] = "execution disabled"
@@ -1097,31 +1110,35 @@ def get_depth_signal() -> dict:
 
 
 def get_volatility_signal() -> dict:
-    raw     = public_get("/api/v2/mix/market/candles",
-                         {"symbol": SYMBOL, "productType": PRODUCT,
-                          "granularity": "1H", "limit": 24})
-    candles = raw if isinstance(raw, list) else []
-    if len(candles) < 10:
-        return {"signal": "NEUTRAL", "regime": "UNKNOWN", "atr_pct": 0.0}
+    _neutral = {"signal": "NEUTRAL", "regime": "UNKNOWN", "atr_pct": 0.0}
+    try:
+        raw     = public_get("/api/v2/mix/market/candles",
+                             {"symbol": SYMBOL, "productType": PRODUCT,
+                              "granularity": "1H", "limit": 24})
+        candles = raw if isinstance(raw, list) else []
+        if len(candles) < 10:
+            return _neutral
 
-    highs  = np.array([float(c[2]) for c in candles])
-    lows   = np.array([float(c[3]) for c in candles])
-    closes = np.array([float(c[4]) for c in candles])
-    tr     = highs - lows
+        highs  = np.array([float(c[2]) for c in candles])
+        lows   = np.array([float(c[3]) for c in candles])
+        closes = np.array([float(c[4]) for c in candles])
+        tr     = highs - lows
 
-    atr_pct    = np.mean(tr[-14:]) / closes[-1] * 100
-    recent_atr = np.mean(tr[-5:])
-    older_atr  = np.mean(tr[-14:-5])
+        atr_pct    = np.mean(tr[-14:]) / closes[-1] * 100
+        recent_atr = np.mean(tr[-5:])
+        older_atr  = np.mean(tr[-14:-5])
 
-    if recent_atr > older_atr * 1.3:
-        regime = "EXPANDING"
-        signal = "BULLISH" if closes[-1] > closes[-5] else "BEARISH"
-    elif recent_atr < older_atr * 0.7:
-        regime, signal = "CONTRACTING", "NEUTRAL"
-    else:
-        regime, signal = "STABLE", "NEUTRAL"
+        if recent_atr > older_atr * 1.3:
+            regime = "EXPANDING"
+            signal = "BULLISH" if closes[-1] > closes[-5] else "BEARISH"
+        elif recent_atr < older_atr * 0.7:
+            regime, signal = "CONTRACTING", "NEUTRAL"
+        else:
+            regime, signal = "STABLE", "NEUTRAL"
 
-    return {"signal": signal, "regime": regime, "atr_pct": round(atr_pct, 3)}
+        return {"signal": signal, "regime": regime, "atr_pct": round(atr_pct, 3)}
+    except Exception:
+        return _neutral
 
 
 def get_macro_signal() -> dict:

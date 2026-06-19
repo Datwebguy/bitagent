@@ -110,26 +110,34 @@ def _session_switch_placeholder(symbol: str, price: float) -> dict:
 
 async def _analyze_session_symbol(symbol: str) -> dict:
     loop = asyncio.get_running_loop()
-    async with _symbol_analysis_lock:
-        prev_symbol = agent.SYMBOL
-        set_symbol(symbol)
-        try:
-            sig_results = await asyncio.wait_for(asyncio.gather(
-                loop.run_in_executor(_executor, _safe_signal, "technical",  get_technical_signal),
-                loop.run_in_executor(_executor, _safe_signal, "sentiment",  get_sentiment_signal),
-                loop.run_in_executor(_executor, _safe_signal, "macro",      get_macro_signal),
-                loop.run_in_executor(_executor, _safe_signal, "momentum",   get_momentum_signal),
-                loop.run_in_executor(_executor, _safe_signal, "depth",      get_depth_signal),
-                loop.run_in_executor(_executor, _safe_signal, "volatility", get_volatility_signal),
-            ), timeout=45.0)
-            signals = dict(zip(
-                ("technical", "sentiment", "macro", "momentum", "depth", "volatility"),
-                sig_results,
-            ))
-            decision_raw = await loop.run_in_executor(_executor, reason_with_qwen, signals)
-            decision = apply_risk_rules(decision_raw)
-        finally:
-            set_symbol(prev_symbol)
+    agent._session_analysis_symbol = symbol
+    try:
+        async with _symbol_analysis_lock:
+            prev_symbol = agent.SYMBOL
+            before_pos = agent._load_position_from_disk()
+            set_symbol(symbol)
+            try:
+                sig_results = await asyncio.wait_for(asyncio.gather(
+                    loop.run_in_executor(_executor, _safe_signal, "technical",  get_technical_signal),
+                    loop.run_in_executor(_executor, _safe_signal, "sentiment",  get_sentiment_signal),
+                    loop.run_in_executor(_executor, _safe_signal, "macro",      get_macro_signal),
+                    loop.run_in_executor(_executor, _safe_signal, "momentum",   get_momentum_signal),
+                    loop.run_in_executor(_executor, _safe_signal, "depth",      get_depth_signal),
+                    loop.run_in_executor(_executor, _safe_signal, "volatility", get_volatility_signal),
+                ), timeout=45.0)
+                signals = dict(zip(
+                    ("technical", "sentiment", "macro", "momentum", "depth", "volatility"),
+                    sig_results,
+                ))
+                decision_raw = await loop.run_in_executor(_executor, reason_with_qwen, signals)
+                decision = apply_risk_rules(decision_raw)
+            finally:
+                set_symbol(prev_symbol)
+                after_pos = agent._load_position_from_disk()
+                if symbol != prev_symbol and not before_pos and after_pos and after_pos.get("symbol") == symbol:
+                    agent._set_local_position(None)
+    finally:
+        agent._session_analysis_symbol = None
 
     price = float(signals.get("technical", {}).get("price") or 0)
     return {
@@ -544,9 +552,15 @@ def _paper_position_payload(account: dict, symbol: str, opened_at: str | None = 
 
 
 def _session_status_snapshot(session: dict) -> dict:
-    symbol = normalize_symbol(session.get("selected_symbol") or agent.SYMBOL)
+    try:
+        symbol = normalize_symbol(session.get("selected_symbol") or agent.SYMBOL)
+    except ValueError:
+        symbol = agent.SYMBOL or "BTCUSDT"
     latest = _latest if isinstance(_latest, dict) else {}
-    latest_symbol = normalize_symbol(latest.get("symbol") or agent.SYMBOL) if latest else ""
+    try:
+        latest_symbol = normalize_symbol(latest.get("symbol") or agent.SYMBOL) if latest else ""
+    except ValueError:
+        latest_symbol = ""
     if latest and latest_symbol == symbol:
         state = dict(latest)
     elif session.get("last_analysis") and session["last_analysis"].get("symbol") == symbol:
@@ -735,7 +749,7 @@ _latest:            dict           = {}
 _history:           list           = []
 _cycle:             int            = 0
 _sim_pnl:           float          = 0.0
-_balance:           float          = get_futures_balance() if execution_mode() == "paper" else 0.0
+_balance:           float          = 0.0
 _last_price:        float          = 0.0
 _last_dir:          str            = "FLAT"
 _agent_task                        = None
@@ -861,6 +875,7 @@ async def agent_loop():
             _last_error = str(e)
             print(f"[agent] {e}")
             await _broadcast({"type": "error", "msg": str(e), "cycle": _cycle})
+            _wake_loop.clear()
             # Back off on repeated failures to avoid hammering the Bitget rate limit
             if _consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                 await asyncio.sleep(LOOP_SECS * 2)
@@ -1341,7 +1356,7 @@ async def close_session_position(
 @app.get("/api/status")
 def status(response: Response, bitagent_session: str | None = Cookie(default=None)):
     session = _ensure_session(response, bitagent_session)
-    account = get_paper_account() if execution_mode() == "paper" else None
+    account = (_latest or {}).get("account") if execution_mode() == "paper" else None
     session_latest = _session_status_snapshot(session)
     session_account = _session_paper_account(
         session,
