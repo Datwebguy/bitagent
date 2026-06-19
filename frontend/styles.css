@@ -1085,6 +1085,7 @@ footer .sep{color:var(--border2)}
 .exec-action-btn.connect{border-color:rgba(0,212,212,.34);color:var(--teal);background:rgba(0,212,212,.06)}
 .exec-action-btn:hover:not(:disabled){border-color:currentColor;background:rgba(255,255,255,.04)}
 .exec-action-btn:disabled{cursor:not-allowed;opacity:.42}
+#resetPaperBtn{width:100%;margin:10px 0 0}
 .session-exec-log{
   margin-top:7px;padding:7px 8px;border:1px solid var(--border);
   border-radius:6px;background:rgba(0,0,0,.14);font-family:var(--mono);

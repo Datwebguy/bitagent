@@ -269,7 +269,7 @@ function updateExecutionHelp(data = {}) {
   const confidence = data.decision?.confidence;
   const exec = data.execution || {};
   const pos = data.position;
-  const account = data.account || {};
+  const account = ui.isPaper ? (data.session_paper_account || data.session?.paper_account || data.account || {}) : (data.account || {});
   const balance = Number(data.balance || 0);
   const equity = ui.paperEquity;
   if (Number.isFinite(equity) && equity > 0 && ui.isPaper) rememberPaperEquity(equity);

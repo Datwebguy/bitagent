@@ -66,6 +66,8 @@ def check(base_url: str, path: str, kind: str, timeout: float) -> tuple[bool, st
                 "creds_set",
                 "session",
                 "session_scope",
+                "session_paper_account",
+                "session_paper_trades",
                 "symbol",
                 "symbol_switch_requires_auth",
                 "risk_config",
@@ -78,6 +80,9 @@ def check(base_url: str, path: str, kind: str, timeout: float) -> tuple[bool, st
                 "mode",
                 "scope",
                 "selected_symbol",
+                "paper_account",
+                "paper_equity",
+                "paper_trade_count",
                 "credentials_set",
                 "live_unlocked",
                 "can_use_live",
@@ -150,6 +155,17 @@ def check_session_paper_budget(base_url: str, timeout: float) -> tuple[bool, str
             return False, "/api/session/paper-budget: did not return session to paper mode"
         if float(session.get("paper_equity") or 0) != 2500:
             return False, "/api/session/paper-budget: paper equity did not update"
+
+        status, payload = fetch_json_with_cookies(opener, base_url, "/api/session/paper-reset", timeout, {"budget": 3000})
+        session = payload.get("session") or {}
+        if status != 200 or not payload.get("ok"):
+            return False, f"/api/session/paper-reset: rejected ({payload.get('error') or status})"
+        if float(session.get("paper_equity") or 0) != 3000:
+            return False, "/api/session/paper-reset: paper equity did not reset"
+
+        status, payload = fetch_json_with_cookies(opener, base_url, "/api/session/paper-trades?limit=5", timeout)
+        if status != 200 or not isinstance(payload, list):
+            return False, "/api/session/paper-trades: invalid response"
     except HTTPError as exc:
         return False, f"/api/session/paper-budget: HTTP {exc.code}"
     except (URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:

@@ -454,6 +454,9 @@ def _get_session(session_id: str) -> dict:
         "mode": "shared_agent",
         "trade_mode": "paper",
         "paper_balance": PAPER_BALANCE,
+        "paper_realized": 0.0,
+        "paper_open_position": None,
+        "paper_trades": [],
         "selected_symbol": agent.SYMBOL,
     })
     session["last_seen"] = now
@@ -468,8 +471,51 @@ def _session_paper_balance(session: dict) -> float:
     return value if value > 0 else PAPER_BALANCE
 
 
+def _session_paper_account(session: dict, mark_price: float | None = None) -> dict:
+    initial = _session_paper_balance(session)
+    realized = float(session.get("paper_realized") or 0)
+    pos = session.get("paper_open_position") or {}
+    mark = float(mark_price or pos.get("mark") or pos.get("entry") or 0)
+    side = str(pos.get("side") or "flat").lower()
+    size = float(pos.get("size") or 0)
+    entry = float(pos.get("entry") or 0)
+    unrealized = 0.0
+    if side in ("long", "short") and size > 0 and entry > 0 and mark > 0:
+        unrealized = (mark - entry) * size if side == "long" else (entry - mark) * size
+    equity = initial + realized + unrealized
+    return {
+        "mode": "session_paper",
+        "initial": round(initial, 2),
+        "realized": round(realized, 4),
+        "unrealized": round(unrealized, 4),
+        "equity": round(equity, 2),
+        "open_side": side if side in ("long", "short") else "flat",
+        "open_size": round(size, 8),
+        "entry": round(entry, 8),
+        "mark": round(mark, 8),
+        "trade_count": len(session.get("paper_trades") or []),
+    }
+
+
+def _session_paper_trades(session: dict, limit: int = 50) -> list:
+    try:
+        limit = max(1, min(int(limit), 200))
+    except (TypeError, ValueError):
+        limit = 50
+    return list(reversed(session.get("paper_trades") or []))[:limit]
+
+
+def _reset_session_paper(session: dict, budget: float | None = None):
+    if budget is not None:
+        session["paper_balance"] = budget if budget > 0 else PAPER_BALANCE
+    session["paper_realized"] = 0.0
+    session["paper_open_position"] = None
+    session["paper_trades"] = []
+
+
 def _session_payload(session: dict) -> dict:
     paper_balance = _session_paper_balance(session)
+    paper_account = _session_paper_account(session)
     payload = {
         "id": session["id"],
         "mode": session.get("mode", "shared_agent"),
@@ -477,7 +523,9 @@ def _session_payload(session: dict) -> dict:
         "trade_mode": session.get("trade_mode", "paper"),
         "selected_symbol": session.get("selected_symbol", agent.SYMBOL),
         "paper_balance": round(paper_balance, 2),
-        "paper_equity": round(paper_balance, 2),
+        "paper_equity": paper_account["equity"],
+        "paper_account": paper_account,
+        "paper_trade_count": paper_account["trade_count"],
         "credentials_set": bool(session.get("credentials")),
         "live_unlocked": bool(session.get("live_unlocked")),
         "can_use_live": bool(session.get("credentials") and session.get("live_unlocked")),
@@ -619,6 +667,8 @@ def _endpoint_map() -> dict:
         "status": "/api/status",
         "decisions": "/api/decisions?limit=50",
         "trades": "/api/trades?limit=50",
+        "session_paper_trades": "/api/session/paper-trades?limit=50",
+        "session_paper_reset": "/api/session/paper-reset",
         "evidence": "/api/evidence",
         "audit": "/api/audit/evidence",
         "trade_export_csv": "/api/audit/trades.csv",
@@ -1017,7 +1067,7 @@ async def session_paper_budget(
 ):
     session = _ensure_session(response, bitagent_session)
     budget = float(req.budget or 0)
-    session["paper_balance"] = budget if budget > 0 else PAPER_BALANCE
+    _reset_session_paper(session, budget)
     session["trade_mode"] = "paper"
     session["live_unlocked"] = False
     payload = _session_payload(session)
@@ -1026,6 +1076,27 @@ async def session_paper_budget(
         "balance": payload["paper_equity"],
         "balance_source": "session_paper",
         "session": payload,
+    }
+
+
+@app.post("/api/session/paper-reset")
+async def session_paper_reset(
+    req: BudgetRequest,
+    response: Response,
+    bitagent_session: str | None = Cookie(default=None),
+):
+    session = _ensure_session(response, bitagent_session)
+    budget = float(req.budget or 0)
+    _reset_session_paper(session, budget if budget > 0 else None)
+    session["trade_mode"] = "paper"
+    session["live_unlocked"] = False
+    payload = _session_payload(session)
+    return {
+        "ok": True,
+        "balance": payload["paper_equity"],
+        "balance_source": "session_paper",
+        "session": payload,
+        "trades": [],
     }
 
 
@@ -1239,6 +1310,10 @@ async def close_session_position(
 def status(response: Response, bitagent_session: str | None = Cookie(default=None)):
     session = _ensure_session(response, bitagent_session)
     account = get_paper_account() if execution_mode() == "paper" else None
+    session_account = _session_paper_account(
+        session,
+        ((_latest or {}).get("price") if _latest else None),
+    )
     return {
         "cycles":    _cycle,
         "connected": len(_clients),
@@ -1251,6 +1326,8 @@ def status(response: Response, bitagent_session: str | None = Cookie(default=Non
         "session":   _session_payload(session),
         "session_scope": "shared_agent",
         "session_creds_set": bool(session.get("credentials")),
+        "session_paper_account": session_account,
+        "session_paper_trades": _session_paper_trades(session, 50),
         "last_error": _last_error,
         "uptime":    int((datetime.now() - _start).total_seconds()),
         "latest":    _latest if _latest else None,
@@ -1260,8 +1337,27 @@ def status(response: Response, bitagent_session: str | None = Cookie(default=Non
     }
 
 
+@app.get("/api/session/paper-trades")
+def session_paper_trades(
+    response: Response,
+    limit: int = 50,
+    bitagent_session: str | None = Cookie(default=None),
+):
+    session = _ensure_session(response, bitagent_session)
+    return JSONResponse(_session_paper_trades(session, limit))
+
+
 @app.get("/api/trades")
-def trades(limit: int = 50):
+def trades(
+    response: Response,
+    limit: int = 50,
+    bitagent_session: str | None = Cookie(default=None),
+):
+    session = _ensure_session(response, bitagent_session)
+    if session.get("trade_mode", "paper") == "paper":
+        session_trades = _session_paper_trades(session, limit)
+        if session_trades:
+            return JSONResponse(session_trades)
     return JSONResponse(get_trade_history(limit))
 
 

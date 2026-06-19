@@ -342,6 +342,7 @@ function updateSessionExecutionUI() {
   const connectBtn = document.getElementById('connectAccountActionBtn');
   const preview = document.getElementById('previewOrderBtn');
   const place = document.getElementById('placeOrderBtn');
+  const resetPaper = document.getElementById('resetPaperBtn');
   const canPreview = ui.isLive && ui.sessionConnected && ui.unlocked;
   const proposalDir = String(_lastSessionProposal?.direction || 'FLAT').toUpperCase();
   const canPlace = canPreview && (proposalDir === 'LONG' || proposalDir === 'SHORT');
@@ -361,6 +362,12 @@ function updateSessionExecutionUI() {
     place.title = canPlace
       ? 'Place the last previewed live order after confirmation.'
       : 'Preview a LONG or SHORT order first.';
+  }
+  if (resetPaper) {
+    resetPaper.disabled = !ui.isPaper;
+    resetPaper.title = ui.isPaper
+      ? 'Reset this browser session paper account and paper trade list.'
+      : 'Switch to Paper mode before resetting the paper account.';
   }
   renderSessionExecLog();
 }
@@ -531,7 +538,9 @@ function applyStatusSnapshot(status) {
   const data = {
     ...snapshot,
     balance: sessionBalance ?? status.balance ?? snapshot.balance,
-    account: status.account ?? snapshot.account,
+    account: status.session_paper_account ?? status.account ?? snapshot.account,
+    session_paper_account: status.session_paper_account,
+    session_paper_trades: status.session_paper_trades,
     position: snapshot.position,
     risk_config: status.risk_config || snapshot.risk_config || { mode: 'paper' },
     decision: snapshot.decision,
@@ -1599,6 +1608,32 @@ async function setPaperBudget(v) {
       showMToast('Failed to set budget');
     }
     console.error('set-budget failed', e);
+  }
+}
+
+async function resetPaperAccount() {
+  if (!getUiState().isPaper) {
+    showMToast('Switch to Paper mode before resetting the paper account');
+    return;
+  }
+  if (!confirm('Reset this paper account? This clears this session paper trade list and returns equity to the paper budget.')) return;
+  try {
+    const data = await fetchJson('/api/session/paper-reset', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({budget: _manualBudget || 0}),
+    }, 12000);
+    if (!data?.ok) {
+      showMToast(data?.error || 'Paper reset failed');
+      return;
+    }
+    if (data.session) updateSessionInfo(data.session, data.session.scope);
+    rememberPaperEquity(data.balance || data.session?.paper_equity || 10000);
+    renderHeaderBalance({session: data.session, balance: data.balance});
+    renderTrades([]);
+    showMToast('Paper account reset');
+  } catch(e) {
+    showMToast(e.name === 'AbortError' ? 'Paper reset timed out' : (e.message || 'Paper reset failed'));
   }
 }
 
