@@ -1254,7 +1254,7 @@ footer .sep{color:var(--border2)}
   #rightPanel{
     height:calc(100dvh - 206px);
     min-height:460px;max-height:none;
-    overflow:hidden;scrollbar-width:thin;
+    overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;
   }
   #rightPanel::-webkit-scrollbar{width:5px}
   #rightPanel::-webkit-scrollbar-track{background:transparent}
