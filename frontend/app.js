@@ -829,9 +829,14 @@ function updateLog(history) {
   const newItems = history.filter(h => !_knownTs.has(h.ts));
   if (!newItems.length) return;
   newItems.forEach(h => _knownTs.add(h.ts));
+  if (_knownTs.size > 500) {
+    const recent = Array.from(_knownTs).slice(-500);
+    _knownTs = new Set(recent);
+  }
 
   if (_knownTs.size === newItems.length) list.innerHTML = '';
 
+  const frag = document.createDocumentFragment();
   newItems.forEach(h => {
     const cls = h.direction === 'LONG' ? 'bull' : h.direction === 'SHORT' ? 'bear' : 'neutral';
     const el  = document.createElement('div');
@@ -844,8 +849,9 @@ function updateLog(history) {
       <span class="log-dir ${cls}">${h.direction}</span>
       <span class="log-price">$${fmt(h.price)}</span>
       <span class="log-conf">${h.confidence}% ${execMark}</span>`;
-    list.prepend(el);
+    frag.prepend(el);
   });
+  list.prepend(frag);
 
   const count = document.getElementById('tabCount');
   if (count && _activeTab === 'decisions')
@@ -1311,11 +1317,15 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════════════
 // WEBSOCKET
 // ══════════════════════════════════════════════════════
+let _wsRetryDelay = 1000;
+const WS_MAX_DELAY = 30000;
+
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws    = new WebSocket(`${proto}://${location.host}/ws`);
 
   ws.onopen = () => {
+    _wsRetryDelay = 1000;
     document.getElementById('overlay').classList.add('hide');
   };
 
@@ -1437,7 +1447,9 @@ function connect() {
   ws.onclose = () => {
     document.getElementById('overlay').classList.remove('hide');
     document.querySelector('.overlay-txt').textContent = 'RECONNECTING...';
-    setTimeout(connect, 3000);
+    const delay = _wsRetryDelay;
+    setTimeout(connect, delay);
+    _wsRetryDelay = Math.min(_wsRetryDelay * 2, WS_MAX_DELAY);
   };
 }
 

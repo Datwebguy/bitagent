@@ -17,7 +17,7 @@ function buildSignalCards() {
   const row = document.getElementById('signalsRow');
   row.innerHTML = SIG_KEYS.map(k => {
     const m = SIG_META[k];
-    return `<div class="sig-card neutral" id="sc-${k}">
+    return `<div class="sig-card neutral loading" id="sc-${k}">
       <div class="scanning"></div>
       <div class="sig-top">
         <span class="sig-name">${m.icon} ${m.label}</span>
@@ -93,6 +93,7 @@ function updateSignalCard(k, data) {
   const bar   = document.getElementById(`sbar-${k}`);
   if (!card) return;
 
+  card.classList.remove('loading');
   card.className = `sig-card ${cls}`;
   badge.className = `sig-badge ${cls}`;
   badge.textContent = sig;
@@ -146,6 +147,7 @@ function buildTicker(data) {
 // DECISION UPDATE
 // ══════════════════════════════════════════════════════
 const GAUGE_LEN = 353.4;
+let _reasoningDebounce = null;
 
 function updateDecision(d) {
   const dir = (d.direction || 'FLAT').toUpperCase();
@@ -184,6 +186,8 @@ function updateDecision(d) {
     dot.style.fill    = arcColor;
   }
   gPct.textContent = pct === 0 ? '—' : pct + '%';
+  const announcer = document.getElementById('a11yAnnouncer');
+  if (announcer) announcer.textContent = `Agent decision: ${dir}, confidence ${pct}%`;
 
   // Params — only show SL/TP/Entry when there is an active directional signal
   if (dir === 'FLAT') {
@@ -202,7 +206,10 @@ function updateDecision(d) {
   }
 
   // Reasoning
-  typeWriter('reasoningTxt', d.reasoning || '—');
+  clearTimeout(_reasoningDebounce);
+  _reasoningDebounce = setTimeout(() => {
+    typeWriter('reasoningTxt', d.reasoning || '—');
+  }, 120);
 
   // Risk note
   const rn = document.getElementById('riskNote');

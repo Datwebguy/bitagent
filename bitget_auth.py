@@ -1,4 +1,8 @@
 from collections.abc import Callable
+import base64
+import hashlib
+import hmac
+import time
 
 
 AUTH_ERROR_CODES = {"40001", "40002", "40003", "40004", "40005", "40031"}
@@ -41,7 +45,11 @@ def extract_usdt(data) -> float | None:
                     return value
         coin = str(data.get("coin") or data.get("marginCoin") or data.get("asset") or "").upper()
         if coin == "USDT" or not coin:
-            for key in ("available", "availableBalance", "usdtEquity", "equity", "balance"):
+            for key in (
+                "available", "availableAmount", "crossMaxAvailable", "free",
+                "equity", "usdtEquity", "availableBalance", "walletBalance",
+                "totalAmount", "netAsset", "balance",
+            ):
                 try:
                     if key in data and data[key] not in ("", None):
                         return float(data[key])
@@ -53,6 +61,28 @@ def extract_usdt(data) -> float | None:
             if value is not None:
                 return value
     return None
+
+
+def sign_request(secret_key: str, ts: str, method: str, path: str, body: str = "") -> str:
+    return base64.b64encode(
+        hmac.new(
+            secret_key.encode(),
+            (ts + method + path + body).encode(),
+            hashlib.sha256,
+        ).digest()
+    ).decode()
+
+
+def auth_headers(api_key: str, secret_key: str, passphrase: str,
+                 method: str, path: str, body: str = "") -> dict:
+    ts = str(int(time.time() * 1000))
+    return {
+        "ACCESS-KEY": api_key,
+        "ACCESS-SIGN": sign_request(secret_key, ts, method, path, body),
+        "ACCESS-TIMESTAMP": ts,
+        "ACCESS-PASSPHRASE": passphrase,
+        "Content-Type": "application/json",
+    }
 
 
 def credential_probe_candidates(product_type: str) -> list[tuple[str, dict]]:

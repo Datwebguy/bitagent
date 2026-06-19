@@ -1,10 +1,13 @@
-import os, json, time, hmac, hashlib, base64, sys, sqlite3, re
+import os, json, time, sys, sqlite3, re, logging, threading
+from concurrent.futures import ThreadPoolExecutor as _TE
 from datetime import datetime, timezone, date
+from logging.handlers import RotatingFileHandler as _RFH
 from pathlib import Path
 from urllib.parse import urlencode
 
 import numpy as np
 import requests
+from bitget_auth import auth_headers, extract_usdt as _extract_usdt
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 BITGET_API_KEY    = os.getenv("BITGET_API_KEY", "")
@@ -30,6 +33,13 @@ LOG_FILE       = DATA_DIR / "agent_log.jsonl"
 POSITION_FILE  = DATA_DIR / "position.json"
 TRADES_DB      = DATA_DIR / "trades.db"
 CREDENTIALS_DISABLED_FILE = DATA_DIR / "credentials_disabled.flag"
+
+_jsonl_handler = _RFH(LOG_FILE, maxBytes=10_000_000, backupCount=1, encoding="utf-8")
+_jsonl_logger = logging.getLogger("bitagent.log")
+if not _jsonl_logger.handlers:
+    _jsonl_logger.addHandler(_jsonl_handler)
+_jsonl_logger.setLevel(logging.INFO)
+_jsonl_logger.propagate = False
 
 if CREDENTIALS_DISABLED_FILE.exists():
     BITGET_API_KEY = ""
@@ -134,25 +144,8 @@ def _min_lot() -> float:
 
 
 # ─── BITGET REST API ──────────────────────────────────────────────────────────
-def _sign(ts: str, method: str, path: str, body: str = "") -> str:
-    return base64.b64encode(
-        hmac.new(
-            BITGET_SECRET_KEY.encode(),
-            (ts + method + path + body).encode(),
-            hashlib.sha256,
-        ).digest()
-    ).decode()
-
-
 def _auth_headers(method: str, path: str, body: str = "") -> dict:
-    ts = str(int(time.time() * 1000))
-    return {
-        "ACCESS-KEY":        BITGET_API_KEY,
-        "ACCESS-SIGN":       _sign(ts, method, path, body),
-        "ACCESS-TIMESTAMP":  ts,
-        "ACCESS-PASSPHRASE": BITGET_PASSPHRASE,
-        "Content-Type":      "application/json",
-    }
+    return auth_headers(BITGET_API_KEY, BITGET_SECRET_KEY, BITGET_PASSPHRASE, method, path, body)
 
 
 def public_get(path: str, params: dict = None) -> dict:
@@ -229,6 +222,11 @@ def _init_db():
             detail         TEXT
         )
     """)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_trades_ts ON trades (ts)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_trades_action ON trades (action)")
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA synchronous=NORMAL")
+    con.execute("PRAGMA cache_size=-8000")
     con.commit()
     con.close()
 
@@ -258,7 +256,7 @@ def get_trade_history(limit: int = 50) -> list:
             limit = max(1, min(int(limit), 500))
         except (TypeError, ValueError):
             limit = 50
-        row_limit = max(limit * 3, 150)
+        row_limit = max(limit * 4, 200)
         con  = sqlite3.connect(TRADES_DB)
         rows = con.execute(
             "SELECT ts,symbol,action,side,size,price,order_id,confidence,detail "
@@ -382,15 +380,44 @@ def get_paper_account(mark_price: float | None = None) -> dict:
     }
 
 
+def _tail_lines(path: Path, n: int) -> list[str]:
+    """Read last n lines of a file without loading the whole file."""
+    try:
+        size = path.stat().st_size
+        chunk_size = 4096
+        pos = size
+        data = b""
+        with open(path, "rb") as f:
+            while pos > 0 and data.count(b"\n") <= n:
+                read_size = min(chunk_size, pos)
+                pos -= read_size
+                f.seek(pos)
+                data = f.read(read_size) + data
+        lines = data.decode("utf-8", errors="replace").splitlines()
+        if pos > 0 and lines:
+            lines = lines[1:]
+        return lines[-n:]
+    except Exception:
+        return []
+
+
 def get_decision_history(limit: int = 50) -> list:
     try:
         if not LOG_FILE.exists():
             return []
-        lines = LOG_FILE.read_text(encoding="utf-8").splitlines()
+        try:
+            limit = max(1, min(int(limit), 500))
+        except (TypeError, ValueError):
+            limit = 50
+        lines = _tail_lines(LOG_FILE, limit)
         out = []
-        for line in lines[-limit:]:
-            if line.strip():
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
                 out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
         return out
     except Exception:
         return []
@@ -398,10 +425,12 @@ def get_decision_history(limit: int = 50) -> list:
 
 def _count_today_trades() -> int:
     try:
+        today_start = date.today().isoformat() + "T00:00:00"
+        today_end   = date.today().isoformat() + "T23:59:59"
         con = sqlite3.connect(TRADES_DB)
         n   = con.execute(
-            "SELECT COUNT(*) FROM trades WHERE ts LIKE ? AND action LIKE 'OPEN%'",
-            (f"{date.today().isoformat()}%",),
+            "SELECT COUNT(*) FROM trades WHERE ts >= ? AND ts <= ? AND action LIKE 'OPEN%'",
+            (today_start, today_end),
         ).fetchone()[0]
         con.close()
         return n
@@ -430,40 +459,6 @@ _balance_fail_count: int           = 0
 def _path_with_query(path: str, params: dict | None = None) -> str:
     qs = urlencode(params or {})
     return f"{path}?{qs}" if qs else path
-
-
-def _extract_usdt(data) -> float | None:
-    if isinstance(data, dict):
-        for nested_key in ("assetsList", "coinAssets", "assets", "list"):
-            nested = data.get(nested_key)
-            if isinstance(nested, list):
-                v = _extract_usdt(nested)
-                if v is not None:
-                    return v
-        coin = data.get("coin") or data.get("coinName") or ""
-        if coin and coin.upper() not in ("USDT", ""):
-            return None
-        for field in ("available", "availableAmount", "crossMaxAvailable", "free",
-                      "equity", "usdtEquity", "availableBalance", "walletBalance",
-                      "totalAmount", "netAsset"):
-            v = data.get(field)
-            if v not in (None, "", "0", 0):
-                try:
-                    return float(v)
-                except (ValueError, TypeError):
-                    continue
-        return None
-    if isinstance(data, list):
-        for item in data:
-            coin = (item.get("coin") or item.get("currency") or "").upper()
-            if coin in ("USDT", ""):
-                for field in ("available", "availableAmount", "crossMaxAvailable", "free",
-                              "equity", "usdtEquity", "availableBalance", "walletBalance",
-                              "totalAmount", "netAsset"):
-                    v = item.get(field)
-                    if v not in (None, "", "0", 0):
-                        return float(v)
-    return None
 
 
 def get_futures_balance() -> float:
@@ -740,6 +735,7 @@ def cancel_open_orders() -> dict:
     return result
 
 
+_exec_lock = threading.Lock()
 _last_exec_ts: float = 0.0
 _session_analysis_symbol: str | None = None
 
@@ -800,10 +796,11 @@ def execute_trade(decision: dict, signals: dict) -> dict:
         result["detail"] = f"holding {want_side}"
         return result
 
-    elapsed = time.time() - _last_exec_ts
-    if _last_exec_ts > 0 and elapsed < EXEC_COOLDOWN:
-        result["detail"] = f"cooldown — {int(EXEC_COOLDOWN - elapsed)}s remaining"
-        return result
+    with _exec_lock:
+        elapsed = time.time() - _last_exec_ts
+        if _last_exec_ts > 0 and elapsed < EXEC_COOLDOWN:
+            result["detail"] = f"cooldown — {int(EXEC_COOLDOWN - elapsed)}s remaining"
+            return result
 
     if _count_today_trades() >= MAX_DAILY_TRADES:
         result["detail"] = f"daily limit reached ({MAX_DAILY_TRADES} trades)"
@@ -847,7 +844,8 @@ def execute_trade(decision: dict, signals: dict) -> dict:
         asset_size = min_lot
 
     if is_paper_mode():
-        _last_exec_ts = time.time()
+        with _exec_lock:
+            _last_exec_ts = time.time()
         _set_local_position(want_side, asset_size, price, "paper")
         _log_trade(f"OPEN_{direction}_PAPER", want_side, asset_size, price,
                    "paper", balance, confidence, f"paper {asset_size} @ ~${price:,.6g}")
@@ -866,7 +864,8 @@ def execute_trade(decision: dict, signals: dict) -> dict:
 
     if r.get("code") == "00000":
         order_id      = r.get("data", {}).get("orderId", "")
-        _last_exec_ts = time.time()
+        with _exec_lock:
+            _last_exec_ts = time.time()
         _set_local_position(want_side, asset_size, price, order_id)
         _log_trade(f"OPEN_{direction}", want_side, asset_size, price,
                    order_id, balance, confidence, f"{asset_size} @ ~${price:,.0f}")
@@ -991,35 +990,42 @@ def get_technical_signal() -> dict:
 
 
 def get_sentiment_signal() -> dict:
-    rate = 0.0
-    try:
-        fr_data = public_get("/api/v2/mix/market/current-fund-rate",
-                             {"symbol": SYMBOL, "productType": PRODUCT})
-        if isinstance(fr_data, list) and fr_data:
-            rate = float(fr_data[0].get("fundingRate", 0) or 0)
-        elif isinstance(fr_data, dict):
-            rate = float(fr_data.get("fundingRate", 0) or 0)
-    except Exception:
-        pass
+    def _funding():
+        try:
+            fr_data = public_get("/api/v2/mix/market/current-fund-rate",
+                                 {"symbol": SYMBOL, "productType": PRODUCT})
+            if isinstance(fr_data, list) and fr_data:
+                return float(fr_data[0].get("fundingRate", 0) or 0)
+            if isinstance(fr_data, dict):
+                return float(fr_data.get("fundingRate", 0) or 0)
+        except Exception:
+            pass
+        return 0.0
 
-    # Long/short ratio from Bitget
-    ls_ratio = 1.0
-    try:
-        ls_raw = public_get("/api/v2/mix/market/long-short-ratio",
-                            {"symbol": SYMBOL, "productType": PRODUCT, "period": "1h"})
-        if isinstance(ls_raw, list) and ls_raw:
-            ls_ratio = float(ls_raw[-1].get("longShortRatio", 1.0))
-    except Exception:
-        pass
+    def _ls_ratio():
+        try:
+            ls_raw = public_get("/api/v2/mix/market/long-short-ratio",
+                                {"symbol": SYMBOL, "productType": PRODUCT, "period": "1h"})
+            if isinstance(ls_raw, list) and ls_raw:
+                return float(ls_raw[-1].get("longShortRatio", 1.0))
+        except Exception:
+            pass
+        return 1.0
 
-    # Fear & Greed index (alternative.me — free, no auth required)
-    fear_greed, fg_label = 50, "Neutral"
-    try:
-        fg = requests.get("https://api.alternative.me/fng/?limit=1", timeout=8).json()
-        fear_greed = int(fg["data"][0]["value"])
-        fg_label   = fg["data"][0]["value_classification"]
-    except Exception:
-        pass
+    def _fear_greed():
+        try:
+            fg = requests.get("https://api.alternative.me/fng/?limit=1", timeout=8).json()
+            return int(fg["data"][0]["value"]), fg["data"][0]["value_classification"]
+        except Exception:
+            return 50, "Neutral"
+
+    with _TE(max_workers=3) as ex:
+        f_fut = ex.submit(_funding)
+        ls_fut = ex.submit(_ls_ratio)
+        fg_fut = ex.submit(_fear_greed)
+        rate = f_fut.result()
+        ls_ratio = ls_fut.result()
+        fear_greed, fg_label = fg_fut.result()
 
     # Positive funding = longs pay shorts = crowd overweight long = contrarian bearish
     f_sig  = "BEARISH" if rate > 0.0003 else "BULLISH" if rate < -0.0001 else "NEUTRAL"
@@ -1276,23 +1282,15 @@ def apply_risk_rules(decision: dict) -> dict:
     return decision
 
 
-# ─── LOGGING ──────────────────────────────────────────────────────────────────
-_LOG_MAX_BYTES = 10_000_000  # 10 MB — keep last 500 entries on rotation
-
-
 def save_log(cycle: int, signals: dict, decision: dict):
     entry = json.dumps({
         "cycle":    cycle,
         "ts":       datetime.now(timezone.utc).isoformat(),
         "signals":  signals,
         "decision": decision,
-    }) + "\n"
+    })
     try:
-        if LOG_FILE.exists() and LOG_FILE.stat().st_size > _LOG_MAX_BYTES:
-            lines = LOG_FILE.read_text(encoding="utf-8").splitlines(keepends=True)
-            LOG_FILE.write_text("".join(lines[-500:]), encoding="utf-8")
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(entry)
+        _jsonl_logger.info(entry)
     except Exception as e:
         print(f"[log] {e}")
 

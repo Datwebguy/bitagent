@@ -1,7 +1,7 @@
-import asyncio, base64, csv, hashlib, hmac, io, json, os, secrets, time
+import asyncio, csv, io, json, os, secrets, time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Set
 from urllib.parse import urlencode
@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 import agent
 import session_store
-from bitget_auth import extract_usdt, validate_credentials
+from bitget_auth import auth_headers, extract_usdt, validate_credentials
 from agent import (
     get_technical_signal, get_sentiment_signal, get_momentum_signal,
     get_depth_signal, get_volatility_signal, get_macro_signal, reason_with_qwen,
@@ -38,7 +38,7 @@ SESSION_ID_BYTES = 24
 SESSION_AUTH_TIMEOUT = 8.0
 
 # Thread pool for blocking I/O (requests, openai SDK) — keeps the event loop free
-_executor = ThreadPoolExecutor(max_workers=8)
+_executor = ThreadPoolExecutor(max_workers=max(16, (os.cpu_count() or 4) * 4))
 _sessions: dict[str, dict] = {}
 
 _SIG_DEFAULTS = {
@@ -169,21 +169,7 @@ def _safe_signal(key: str, fn):
 
 def _session_auth_headers(api_key: str, secret_key: str, passphrase: str,
                           method: str, path: str, body: str = "") -> dict:
-    ts = str(int(time.time() * 1000))
-    sig = base64.b64encode(
-        hmac.new(
-            secret_key.encode(),
-            (ts + method + path + body).encode(),
-            hashlib.sha256,
-        ).digest()
-    ).decode()
-    return {
-        "ACCESS-KEY": api_key,
-        "ACCESS-SIGN": sig,
-        "ACCESS-TIMESTAMP": ts,
-        "ACCESS-PASSPHRASE": passphrase,
-        "Content-Type": "application/json",
-    }
+    return auth_headers(api_key, secret_key, passphrase, method, path, body)
 
 
 def _session_auth_get_raw(api_key: str, secret_key: str, passphrase: str,
@@ -722,12 +708,16 @@ def _endpoint_map() -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _agent_task, _wake_loop, _symbol_analysis_lock
+    global _agent_task, _session_evict_task, _wake_loop, _symbol_analysis_lock
     _wake_loop = asyncio.Event()
     _symbol_analysis_lock = asyncio.Lock()
     _agent_task = asyncio.create_task(agent_loop())
-    yield
-    _agent_task.cancel()
+    _session_evict_task = asyncio.create_task(_evict_stale_sessions())
+    try:
+        yield
+    finally:
+        _agent_task.cancel()
+        _session_evict_task.cancel()
 
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
@@ -753,6 +743,7 @@ _balance:           float          = 0.0
 _last_price:        float          = 0.0
 _last_dir:          str            = "FLAT"
 _agent_task                        = None
+_session_evict_task                = None
 _consecutive_errors: int           = 0
 _wake_loop:          asyncio.Event = None
 _symbol_analysis_lock: asyncio.Lock = None
@@ -763,13 +754,25 @@ _start = datetime.now()
 
 
 async def _broadcast(data: dict):
+    if not _clients:
+        return
+    payload = json.dumps(data)
     dead = set()
     for ws in list(_clients):
         try:
-            await ws.send_text(json.dumps(data))
+            await ws.send_text(payload)
         except Exception:
             dead.add(ws)
     _clients.difference_update(dead)
+
+
+async def _evict_stale_sessions():
+    while True:
+        await asyncio.sleep(1800)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        for sid, session in list(_sessions.items()):
+            if (session.get("last_seen") or "") < cutoff:
+                _sessions.pop(sid, None)
 
 
 async def agent_loop():
