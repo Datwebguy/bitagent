@@ -5,7 +5,7 @@ async function fetchJson(url, options = {}, timeoutMs = 12000) {
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const headers = new Headers(options.headers || {});
-    if (_operatorToken) headers.set('X-Admin-Token', _operatorToken);
+    if (_operatorMode && _operatorToken) headers.set('X-Admin-Token', _operatorToken);
     const res = await fetch(url, {...options, headers, signal: ctrl.signal});
     let data = null;
     try { data = await res.json(); } catch(e) {}

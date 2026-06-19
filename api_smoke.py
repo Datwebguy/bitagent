@@ -120,7 +120,7 @@ def check(base_url: str, path: str, kind: str, timeout: float) -> tuple[bool, st
         text = body.decode("utf-8", errors="ignore")
         script_markers = {
             "/static/runtime-state.js": ("getUiState", "PAPER_EQUITY_KEY", "rememberPaperEquity"),
-            "/static/api-client.js": ("fetchJson", "AbortController"),
+            "/static/api-client.js": ("fetchJson", "AbortController", "_operatorMode && _operatorToken"),
             "/static/market-rendering.js": ("buildSignalCards", "updateDecision"),
             "/static/app.js": ("rebuildConnectSelect", "connect()"),
         }
