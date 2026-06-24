@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0E11">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>BitAgent</title>
+<meta name="application-name" content="BitAgent">
+<meta name="apple-mobile-web-app-title" content="BitAgent">
+<meta property="og:site_name" content="BitAgent">
+<meta property="og:title" content="BitAgent">
+<meta name="twitter:title" content="BitAgent">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='7' y='7' width='86' height='86' rx='22' fill='%230B0E11'/%3E%3Crect x='7' y='7' width='86' height='86' rx='22' fill='none' stroke='%231E2530' stroke-width='2'/%3E%3Cpath d='M31 76V24h25c10 0 16 5 16 13.5 0 6-3.4 10.5-9.2 12.4C70.5 51.8 75 56.8 75 64c0 8.8-7 12-18.5 12H31Z' fill='%23101820' stroke='%2300D4AA' stroke-width='5' stroke-linejoin='round'/%3E%3Cpath d='M43 41h12c4 0 6-1.8 6-5s-2-5-6-5H43v10Zm0 28h14c4.5 0 7-2 7-5.5S61.5 58 57 58H43v11Z' fill='%23E0E6F0'/%3E%3Cpath d='M24 77h52' stroke='%2300D4AA' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css?v=20260624-1">
+</head>
+<body>
+
+<div id="a11yAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+<canvas id="bg"></canvas>
+
+<div id="app">
+
+  <!-- TICKER TAPE -->
+  <div class="ticker-wrap">
+    <div class="ticker-track" id="tickerTrack"><!-- filled by JS --></div>
+  </div>
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand" role="button" tabindex="0" onclick="returnHome()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();returnHome();}" title="Return to BitAgent home">
+      <svg class="logo-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="7" y="7" width="86" height="86" rx="22" fill="#0B0E11"/>
+        <rect x="7" y="7" width="86" height="86" rx="22" fill="none" stroke="#1E2530" stroke-width="2"/>
+        <path d="M31 76V24h25c10 0 16 5 16 13.5 0 6-3.4 10.5-9.2 12.4C70.5 51.8 75 56.8 75 64c0 8.8-7 12-18.5 12H31Z" fill="#101820" stroke="#00D4AA" stroke-width="5" stroke-linejoin="round"/>
+        <path d="M43 41h12c4 0 6-1.8 6-5s-2-5-6-5H43v10Zm0 28h14c4.5 0 7-2 7-5.5S61.5 58 57 58H43v11Z" fill="#E0E6F0"/>
+        <path d="M24 77h52" stroke="#00D4AA" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-name">BITAGENT</span>
+        <span class="brand-sub">AI Trading Risk Cockpit</span>
+      </div>
+      <div class="live-pill" style="display:none"><span class="live-dot"></span>LIVE</div>
+    </div>
+    <div class="hdr-right">
+      <div class="symbol-wrap">
+        <div class="stat-chip symbol-chip" id="symbolChip" onclick="toggleSymbolDrop()">
+          <span class="lbl">Symbol</span>
+          <span class="val teal" id="symbolVal">—</span>
+          <span class="sym-chevron" id="symChevron">▾</span>
+        </div>
+      </div>
+      <div class="stat-chip"><span class="lbl">Price</span><span class="val" id="hdrPrice">$—</span></div>
+      <div class="stat-chip"><span class="lbl">Cycle</span><span class="val" id="hdrCycle">#0</span></div>
+      <div class="stat-chip" id="balanceChip" title="Paper equity or connected Bitget balance" style="cursor:pointer" onclick="toggleBudgetPopover()">
+        <span class="lbl" id="balanceLabel">Paper Equity</span><span class="val teal" id="hdrBalance">$—</span>
+      </div>
+      <div class="stat-chip"><span class="lbl">Position</span><span class="val" id="hdrPosVal" style="color:var(--txt3)">FLAT</span></div>
+      <button class="disconnect-btn" id="accountActionBtn" onclick="handleAccountAction()" title="Connect account">Connect Account</button>
+    </div>
+  </header>
+
+  <!-- SIGNALS ROW (mobile: Signals tab; desktop: inline) -->
+  <div id="tab-signals">
+    <div class="signals-row" id="signalsRow"></div>
+  </div>
+
+  <!-- MAIN ROW -->
+  <div class="main-row">
+
+    <!-- DECISION PANEL / OVERVIEW TAB -->
+    <div class="panel decision-panel" id="tab-overview">
+      <div class="panel-hdr">
+        <span class="panel-title">Agent Decision Engine</span>
+        <span class="panel-tag" id="lastTs">Waiting...</span>
+      </div>
+      <div class="decision-body">
+        <div class="decision-top">
+          <!-- Direction -->
+          <div class="dir-section">
+            <div class="dir-arrow-wrap neutral" id="dirWrap">
+              <div class="dir-arrow neutral" id="dirArrow">—</div>
+            </div>
+            <div class="dir-name neutral" id="dirName">AWAITING</div>
+          </div>
+          <!-- Confidence Gauge -->
+          <div class="gauge-section">
+            <!-- 270° speedometer gauge — arc from bottom-left counterclockwise over top to bottom-right -->
+            <!-- Arc length = 2π×75×(270/360) = 353.4; dashoffset=353.4 means empty, 0 means full -->
+            <svg viewBox="0 0 200 200" class="gauge-svg">
+              <!-- Tick marks at 25% intervals -->
+              <line x1="100" y1="30" x2="100" y2="20" stroke="#1E2530" stroke-width="2" stroke-linecap="round"/>
+              <line x1="153" y1="47" x2="160" y2="40" stroke="#1E2530" stroke-width="2" stroke-linecap="round"/>
+              <line x1="47"  y1="47" x2="40"  y2="40" stroke="#1E2530" stroke-width="2" stroke-linecap="round"/>
+              <!-- Track -->
+              <path d="M47 153 A75 75 0 1 0 153 153"
+                fill="none" stroke="#1A2030" stroke-width="13" stroke-linecap="round"/>
+              <!-- Glow layer (wide, dim) -->
+              <path d="M47 153 A75 75 0 1 0 153 153" id="gaugeGlow"
+                fill="none" stroke="transparent" stroke-width="22" stroke-linecap="round"
+                stroke-dasharray="353.4" stroke-dashoffset="353.4" opacity="0.25"
+                style="transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1),stroke .5s"/>
+              <!-- Progress arc -->
+              <path d="M47 153 A75 75 0 1 0 153 153" id="gaugeArc"
+                fill="none" stroke="#00D4AA" stroke-width="13" stroke-linecap="round"
+                stroke-dasharray="353.4" stroke-dashoffset="353.4"
+                style="transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1),stroke .5s"/>
+              <!-- Dot at the tip of the progress arc — cx/cy animated by JS -->
+              <circle id="gaugeDot" cx="47" cy="153" r="5" fill="#00D4AA" opacity="0"
+                style="transition:opacity .5s,cx 1.2s cubic-bezier(.4,0,.2,1),cy 1.2s cubic-bezier(.4,0,.2,1)"/>
+              <!-- Center text -->
+              <text x="100" y="107" class="gauge-pct" id="gaugePct" text-anchor="middle">—</text>
+              <text x="100" y="126" class="gauge-lbl" text-anchor="middle">CONFIDENCE</text>
+            </svg>
+          </div>
+        </div>
+        <!-- Trade Params — 4-column strip, always visible -->
+        <div class="params-strip">
+          <div class="param-row">
+            <span class="param-lbl">Entry</span>
+            <span class="param-val" id="pEntry">—</span>
+          </div>
+          <div class="param-row">
+            <span class="param-lbl" id="lblSL">Stop Loss</span>
+            <span class="param-val bear" id="pSL">—</span>
+          </div>
+          <div class="param-row">
+            <span class="param-lbl" id="lblTP">Take Profit</span>
+            <span class="param-val bull" id="pTP">—</span>
+          </div>
+          <div class="param-row">
+            <span class="param-lbl">Size</span>
+            <span class="param-val" id="pSize">—</span>
+          </div>
+        </div>
+      </div>
+      <!-- Reasoning (collapsible) -->
+      <div class="reasoning-section">
+        <div class="reasoning-lbl reasoning-toggle-hdr" onclick="toggleReasoning(this)">
+          <span>LLM Reasoning</span>
+          <span class="reasoning-chevron" id="reasoningArrow">▾</span>
+        </div>
+        <div class="reasoning-body expanded" id="reasoningBody">
+          <div class="reasoning-txt" id="reasoningTxt">
+            Waiting for first agent cycle...<span class="cursor"></span>
+          </div>
+          <div class="risk-note" id="riskNote"></div>
+        </div>
+      </div>
+      <!-- Execution Status Bar -->
+      <div class="exec-bar" id="execBar">
+        <div class="exec-bar-left">
+          <span class="exec-bar-label">EXECUTION</span>
+          <span class="exec-bar-dot off" id="execDot"></span>
+          <span class="exec-bar-action off" id="execAction">IDLE</span>
+        </div>
+        <div class="cooldown-wrap" id="cooldownWrap" style="display:none">
+          <div class="exec-bar-detail" id="execDetail" style="flex:none"></div>
+          <div class="cooldown-bar-bg"><div class="cooldown-bar-fill" id="cooldownFill" style="width:0%"></div></div>
+        </div>
+        <div class="exec-bar-detail" id="execDetailNormal">Waiting for first agent cycle...</div>
+        <div class="exec-bar-badge" id="execBadge">—</div>
+      </div>
+      <!-- Mobile: quick-glance metrics strip (scrollable) -->
+      <div class="m-metrics-row" id="mMetricsRow" aria-label="Quick metrics">
+        <div class="m-metric-chip">
+          <span class="mk">Equity</span>
+          <span class="mv teal" id="mBalance">$—</span>
+        </div>
+        <div class="m-metric-chip">
+          <span class="mk">Position</span>
+          <span class="mv" id="mPos">FLAT</span>
+        </div>
+        <div class="m-metric-chip">
+          <span class="mk">Cycle</span>
+          <span class="mv" id="mCycle">#0</span>
+        </div>
+        <div class="m-metric-chip">
+          <span class="mk">Price</span>
+          <span class="mv" id="mPrice">$—</span>
+        </div>
+        <div class="m-metric-chip">
+          <span class="mk">Uptime</span>
+          <span class="mv" id="mUptime">00:00:00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Position + Tabs -->
+    <div class="panel" id="rightPanel">
+
+      <!-- POSITION SECTION (mobile: Position tab) -->
+      <div id="posSection">
+        <div class="pos-widget" id="posWidget">
+          <div class="pos-widget-hdr">
+            <span class="pos-widget-title">◆ Open Position</span>
+            <span class="pos-badge flat" id="posBadge">FLAT</span>
+          </div>
+          <div class="pos-rows" id="posRows">
+            <div class="pos-empty" style="grid-column:1/-1">No open position</div>
+          </div>
+        </div>
+        <div class="pos-actions" id="posActions">
+          <button class="pos-action-btn danger" id="posCloseBtn" disabled
+            onclick="openCloseSheet()" aria-label="Close open position">
+            Close Position
+          </button>
+          <button class="pos-action-btn secondary" id="cancelOrdersBtn" disabled
+            onclick="confirmCancelOrders()" aria-label="Cancel open orders">
+            Cancel Orders
+          </button>
+        </div>
+      </div>
+
+      <div class="execution-help" id="executionHelp">
+        <div class="execution-help-hdr">
+          <span class="execution-help-title">Execution State</span>
+          <span class="mode-pill" id="modePill">PAPER</span>
+        </div>
+        <div class="execution-help-grid">
+          <div class="execution-help-row">
+            <span class="execution-help-key">Wallet</span>
+            <span class="execution-help-val gold" id="helpWallet">Paper $10,000</span>
+          </div>
+          <div class="execution-help-row">
+            <span class="execution-help-key">Decision</span>
+            <span class="execution-help-val" id="helpDecision">Waiting</span>
+          </div>
+          <div class="execution-help-row">
+            <span class="execution-help-key">Execution</span>
+            <span class="execution-help-val" id="helpExecution">Waiting</span>
+          </div>
+          <div class="execution-help-row">
+            <span class="execution-help-key">Position</span>
+            <span class="execution-help-val" id="helpPosition">Flat</span>
+          </div>
+          <div class="execution-help-row">
+            <span class="execution-help-key">Realized P&L</span>
+            <span class="execution-help-val" id="helpRealized">$0.00</span>
+          </div>
+          <div class="execution-help-row">
+            <span class="execution-help-key">Open P&L</span>
+            <span class="execution-help-val" id="helpUnrealized">$0.00</span>
+          </div>
+        </div>
+        <div class="execution-help-note" id="helpNote">
+          <strong>Paper mode:</strong> Decision Log shows every AI cycle. Executed Trades shows fills only. Paper equity changes only from paper P&L, not real money.
+        </div>
+        <div class="trade-mode-toggle" role="group" aria-label="Trading mode">
+          <button class="trade-mode-btn paper active" id="tradeModePaperBtn" type="button"
+            onclick="setTradeMode('paper')">Paper</button>
+          <button class="trade-mode-btn live" id="tradeModeLiveBtn" type="button"
+            onclick="setTradeMode('live')">Live Account</button>
+        </div>
+        <button class="exec-action-btn secondary" id="resetPaperBtn" type="button"
+          onclick="resetPaperAccount()">Reset Paper Account</button>
+        <div class="funding-readiness" id="fundingReadiness">
+          <div class="funding-readiness-title">
+            <span>Funding & Live Readiness</span>
+            <span id="fundingStatus">Paper only</span>
+          </div>
+          <div class="funding-grid">
+            <div class="funding-chip">
+              <span class="funding-key">Funds</span>
+              <span class="funding-val wait" id="fundingFunds">Simulated paper equity</span>
+            </div>
+            <div class="funding-chip">
+              <span class="funding-key">Source</span>
+              <span class="funding-val" id="fundingSource">BitAgent paper wallet</span>
+            </div>
+            <div class="funding-chip">
+              <span class="funding-key">Custody</span>
+              <span class="funding-val pass" id="fundingCustody">User keeps funds on Bitget</span>
+            </div>
+            <div class="funding-chip">
+              <span class="funding-key">Live Gate</span>
+              <span class="funding-val wait" id="fundingGate">Connect account</span>
+            </div>
+          </div>
+          <div class="funding-note" id="fundingNote">
+            Paper mode uses simulated equity. Real users fund Bitget directly; BitAgent only reads balance after API connection.
+          </div>
+        </div>
+        <div class="execution-actions" id="sessionExecActions">
+          <button class="exec-action-btn connect" id="connectAccountActionBtn" type="button"
+            onclick="showConnectScreen()">Connect Account</button>
+          <button class="exec-action-btn secondary" id="previewOrderBtn" type="button"
+            onclick="previewSessionOrder()">Preview Order</button>
+          <button class="exec-action-btn danger" id="placeOrderBtn" type="button"
+            onclick="placeSessionOrder()">Place Live Order</button>
+        </div>
+        <div class="session-exec-log" id="sessionExecLog">
+          <span class="session-exec-muted">Connect, unlock, then preview before placing a live order.</span>
+        </div>
+      </div>
+
+      <div class="rules-panel" id="rulesPanel">
+        <div class="rules-title">Strategy Rules</div>
+        <div class="rules-grid">
+          <div class="rule-chip">
+            <span class="rule-key">Confidence</span>
+            <span class="rule-val wait" id="ruleConfidence">Waiting</span>
+          </div>
+          <div class="rule-chip">
+            <span class="rule-key">Direction</span>
+            <span class="rule-val wait" id="ruleDirection">Waiting</span>
+          </div>
+          <div class="rule-chip">
+            <span class="rule-key">Cooldown</span>
+            <span class="rule-val wait" id="ruleCooldown">Waiting</span>
+          </div>
+          <div class="rule-chip">
+            <span class="rule-key">Daily Cap</span>
+            <span class="rule-val wait" id="ruleDaily">0/10 opens</span>
+          </div>
+          <div class="rule-chip">
+            <span class="rule-key">Order Size</span>
+            <span class="rule-val" id="ruleSize">1% equity</span>
+          </div>
+          <div class="rule-chip">
+            <span class="rule-key">Cycle</span>
+            <span class="rule-val" id="ruleCycle">60s</span>
+          </div>
+        </div>
+        <div class="rules-note" id="rulesNote">
+          A trade can execute only when confidence passes the threshold, direction is LONG/SHORT, cooldown is clear, and daily/order limits allow it.
+        </div>
+      </div>
+
+      <!-- HISTORY SECTION (mobile: History tab; desktop: below position) -->
+      <div id="historySection">
+        <!-- Tabs -->
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="decisions" onclick="showTab('decisions')">Decision Log</button>
+          <button class="tab-btn" data-tab="trades" onclick="showTab('trades')">Executed Trades</button>
+          <span class="tab-count" id="tabCount">0 decisions</span>
+        </div>
+
+        <!-- Decision log (default visible) -->
+        <div class="log-list" id="logList">
+          <div class="log-empty">
+            <span style="font-size:22px;opacity:.3">◈</span>
+            <span>Agent is starting up</span>
+            <span style="color:var(--txt3)">First cycle in ~60s</span>
+          </div>
+        </div>
+
+        <!-- Trade history (hidden until tab clicked) -->
+        <div class="log-list" id="tradeList" style="display:none">
+          <div class="log-empty">
+            <span style="font-size:22px;opacity:.3">◈</span>
+            <span>No executed trades yet</span>
+            <span style="color:var(--txt3)">Trades appear here after execution</span>
+          </div>
+        </div>
+      </div><!-- /historySection -->
+
+    </div>
+
+  </div><!-- /main-row -->
+
+  <!-- FOOTER -->
+  <footer>
+    <span><span class="lbl">Uptime</span> <span class="val" id="uptime">00:00:00</span></span>
+    <span class="sep">|</span>
+    <span><span class="lbl">Interval</span> <span class="val">60s</span></span>
+    <span class="sep">|</span>
+    <span><span class="lbl">Signals</span> <span class="val">6 Active</span></span>
+    <span class="sep">|</span>
+    <span><span class="lbl">Model</span> <span class="val">Qwen + Rules</span></span>
+    <span class="sep">|</span>
+    <span><span class="lbl">Exchange</span> <span class="val">Bitget Futures</span></span>
+    <span class="sep">|</span>
+    <span><span class="lbl">Mode</span> <span class="val" id="footerMode" style="color:var(--txt3)">—</span></span>
+  </footer>
+
+</div><!-- /app -->
+
+<!-- MOBILE SETTINGS PANEL -->
+<div id="tab-settings" role="dialog" aria-label="Settings">
+  <div class="s-inner">
+    <div class="settings-section">
+      <span class="settings-section-label">Connection</span>
+      <div class="m-status-card" id="mStatusCard">
+        <div class="m-status-dot off" id="mStatusDot"></div>
+        <div class="m-status-text">
+          <span id="mStatusTxt">Not connected</span>
+          &nbsp;·&nbsp; <span class="m-status-sym" id="mStatusSym">—</span>
+        </div>
+        <button class="disconnect-btn" onclick="doDisconnect()" id="mDisconnectBtn"
+          style="display:none;padding:4px 10px;font-size:9px">Disconnect</button>
+      </div>
+    </div>
+    <div class="settings-section" id="mSymSection">
+      <span class="settings-section-label">Switch Symbol</span>
+      <div class="m-symbol-grid" id="mSymGrid"><!-- filled by JS --></div>
+    </div>
+    <div class="settings-section" id="mBudgetSection">
+      <span class="settings-section-label">Budget Fallback</span>
+      <div class="m-budget-row">
+        <input class="m-budget-input" id="mBudgetInput" type="number"
+          placeholder="e.g. 50" min="0" step="1">
+        <button class="m-budget-btn" onclick="mSetBudget()">Set</button>
+      </div>
+    </div>
+    <div class="settings-section">
+      <span class="settings-section-label">Risk Parameters</span>
+      <div class="m-risk-card">
+        <div class="m-risk-row">
+          <span class="m-risk-key">Limits</span>
+          <span class="m-risk-val" id="mRiskLev" style="font-size:10px">—</span>
+        </div>
+        <div class="m-risk-row">
+          <span class="m-risk-key">Max Size</span>
+          <span class="m-risk-val" id="mRiskPct">—</span>
+        </div>
+        <div class="m-risk-row">
+          <span class="m-risk-key">Mode</span>
+          <span class="m-risk-val" id="mRiskMode">—</span>
+        </div>
+        <div class="m-risk-row">
+          <span class="m-risk-key">Model</span>
+          <span class="m-risk-val">Qwen + Rules</span>
+        </div>
+        <div class="m-risk-row">
+          <span class="m-risk-key">Interval</span>
+          <span class="m-risk-val">60s</span>
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <span class="settings-section-label">Live Readiness</span>
+      <div class="m-status-card">
+        <div class="m-status-dot off" id="mLiveDot"></div>
+        <div class="m-status-text">
+          <span id="mLiveTxt">Locked</span>
+          &nbsp;·&nbsp; <span class="m-status-sym" id="mLiveHint">Connect account first</span>
+        </div>
+        <button class="disconnect-btn" onclick="toggleLiveUnlock()" id="mLiveBtn"
+          style="padding:4px 10px;font-size:9px">Unlock</button>
+      </div>
+    </div>
+    <div class="settings-section">
+      <span class="settings-section-label">Audit Center</span>
+      <div class="evidence-card">
+        <div class="evidence-row">
+          <span class="evidence-key">Agent Type</span>
+          <span class="evidence-val">Trading Agent</span>
+        </div>
+        <div class="evidence-row">
+          <span class="evidence-key">Mode</span>
+          <span class="evidence-val" id="evidenceMode">Paper</span>
+        </div>
+        <div class="evidence-row">
+          <span class="evidence-key">Session Scope</span>
+          <span class="evidence-val" id="evidenceSession">Shared Agent</span>
+        </div>
+        <div class="evidence-row">
+          <span class="evidence-key">Evidence</span>
+          <span class="evidence-val" id="auditLastChecked">Ready</span>
+        </div>
+        <div class="audit-list" id="auditList">
+          <div class="audit-item" data-path="/api/status">
+            <div class="audit-meta">
+              <span class="audit-name">System Status</span>
+              <span class="audit-path">/api/status</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/status')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/status')">Copy</button>
+            </div>
+          </div>
+          <div class="audit-item" data-path="/api/decisions?limit=50">
+            <div class="audit-meta">
+              <span class="audit-name">Decision Log</span>
+              <span class="audit-path">/api/decisions?limit=50</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/decisions?limit=50')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/decisions?limit=50')">Copy</button>
+            </div>
+          </div>
+          <div class="audit-item" data-path="/api/trades?limit=50">
+            <div class="audit-meta">
+              <span class="audit-name">Executed Trades</span>
+              <span class="audit-path">/api/trades?limit=50</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/trades?limit=50')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/trades?limit=50')">Copy</button>
+            </div>
+          </div>
+          <div class="audit-item" data-path="/api/audit/evidence">
+            <div class="audit-meta">
+              <span class="audit-name">Audit Pack</span>
+              <span class="audit-path">/api/audit/evidence</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/audit/evidence')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/audit/evidence')">Copy</button>
+            </div>
+          </div>
+          <div class="audit-item" data-path="/api/audit/trades.csv">
+            <div class="audit-meta">
+              <span class="audit-name">CSV Export</span>
+              <span class="audit-path">/api/audit/trades.csv</span>
+            </div>
+            <div class="audit-actions">
+              <button class="audit-btn" onclick="openAuditPath('/api/audit/trades.csv')">Open</button>
+              <button class="audit-btn" onclick="copyAuditPath('/api/audit/trades.csv')">Copy</button>
+            </div>
+          </div>
+        </div>
+        <div class="evidence-note">
+          Use Audit Center to verify live market perception, AI or rules decisions, paper/live execution history, and risk controls.
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <button class="m-settings-disconnect" onclick="doDisconnect()">
+        Disconnect Account
+      </button>
+    </div>
+    <div class="settings-link">
+      <a href="https://github.com/Datwebguy/bitagent" target="_blank" rel="noopener">
+        BitAgent Product Repository
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM SHEET BACKDROP -->
+<div class="sheet-backdrop" id="sheetBackdrop" onclick="closeSheet()"></div>
+
+<!-- CLOSE POSITION BOTTOM SHEET -->
+<div class="bottom-sheet" id="closePosSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">Close Position</div>
+  <div class="sheet-body">
+    <div class="sheet-row">
+      <span class="sheet-key">Symbol</span>
+      <span class="sheet-val" id="sheetSym">—</span>
+    </div>
+    <div class="sheet-row">
+      <span class="sheet-key">Side</span>
+      <span class="sheet-val" id="sheetSide">—</span>
+    </div>
+    <div class="sheet-row">
+      <span class="sheet-key">Size</span>
+      <span class="sheet-val" id="sheetSize">—</span>
+    </div>
+    <div class="sheet-row">
+      <span class="sheet-key">Entry Price</span>
+      <span class="sheet-val" id="sheetEntry">—</span>
+    </div>
+    <div class="sheet-row">
+      <span class="sheet-key">Unrealised P&amp;L</span>
+      <span class="sheet-val" id="sheetPnl">—</span>
+    </div>
+  </div>
+  <div class="sheet-btn-row">
+    <button class="sheet-btn secondary" onclick="closeSheet()">Cancel</button>
+    <button class="sheet-btn danger" onclick="confirmClosePosition()">Close Position</button>
+  </div>
+</div>
+
+<!-- TOAST NOTIFICATION -->
+<div class="m-toast" id="mToast"></div>
+
+<!-- MOBILE TAB BAR -->
+<nav class="m-tab-bar" role="tablist" aria-label="Navigation">
+  <button class="m-tab active" id="mtab-overview" role="tab"
+    aria-selected="true" onclick="switchMobileTab('overview')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+    Overview
+  </button>
+  <button class="m-tab" id="mtab-signals" role="tab"
+    aria-selected="false" onclick="switchMobileTab('signals')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Signals
+  </button>
+  <button class="m-tab m-tab-center" id="mtab-position" role="tab"
+    aria-selected="false" onclick="switchMobileTab('position')">
+    <div class="m-tab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    </div>
+    Position
+  </button>
+  <button class="m-tab" id="mtab-history" role="tab"
+    aria-selected="false" onclick="switchMobileTab('history')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+    History
+  </button>
+  <button class="m-tab" id="mtab-settings" role="tab"
+    aria-selected="false" onclick="switchMobileTab('settings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Settings
+  </button>
+</nav>
+
+<!-- CONNECTING OVERLAY -->
+<div id="overlay">
+  <div class="overlay-spinner"></div>
+  <div class="overlay-txt">BITAGENT INITIALIZING</div>
+  <div class="overlay-sub">Connecting to signal feeds...</div>
+</div>
+
+<!-- INTRO SCREEN -->
+<div id="introScreen">
+  <canvas id="introBg"></canvas>
+  <button class="intro-skip" onclick="skipIntro()">Skip Intro</button>
+  <div class="intro-corner-label">BitAgent Assistant</div>
+  <div class="intro-side-note left">
+    <strong>Live Signals</strong>
+    Market scan active<br>
+    Paper mode ready
+  </div>
+  <div class="intro-year">2026</div>
+  <svg class="intro-orbit-mark top" viewBox="0 0 64 64" aria-hidden="true">
+    <ellipse cx="32" cy="32" rx="25" ry="7" fill="none" stroke="currentColor" stroke-width="2"/>
+    <ellipse cx="32" cy="32" rx="7" ry="25" fill="none" stroke="currentColor" stroke-width="2"/>
+    <circle cx="32" cy="32" r="3" fill="currentColor"/>
+  </svg>
+  <svg class="intro-orbit-mark mid" viewBox="0 0 64 64" aria-hidden="true">
+    <ellipse cx="32" cy="32" rx="25" ry="7" fill="none" stroke="currentColor" stroke-width="2"/>
+    <ellipse cx="32" cy="32" rx="7" ry="25" fill="none" stroke="currentColor" stroke-width="2"/>
+    <circle cx="32" cy="32" r="3" fill="currentColor"/>
+  </svg>
+  <div class="intro-body">
+    <section class="intro-copy-wrap" aria-label="BitAgent homepage">
+      <div class="intro-logo-wrap">
+        <svg class="intro-logo-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="7" y="7" width="86" height="86" rx="22" fill="#0B0E11"/>
+          <rect x="7" y="7" width="86" height="86" rx="22" fill="none" stroke="#1E2530" stroke-width="2"/>
+          <path d="M31 76V24h25c10 0 16 5 16 13.5 0 6-3.4 10.5-9.2 12.4C70.5 51.8 75 56.8 75 64c0 8.8-7 12-18.5 12H31Z" fill="#101820" stroke="#00D4AA" stroke-width="5" stroke-linejoin="round"/>
+          <path d="M43 41h12c4 0 6-1.8 6-5s-2-5-6-5H43v10Zm0 28h14c4.5 0 7-2 7-5.5S61.5 58 57 58H43v11Z" fill="#E0E6F0"/>
+          <path d="M24 77h52" stroke="#00D4AA" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <div class="intro-logo-text">BITAGENT</div>
+      </div>
+      <div class="intro-tag">AI Trading Assistant</div>
+      <h1 class="intro-headline">Signal. Reason. <span>Execute.</span></h1>
+      <p class="intro-copy">Live market intelligence with paper first execution control.</p>
+      <div class="intro-line"></div>
+      <div class="intro-powered"><span>Qwen AI</span> and <span>Bitget</span></div>
+    </section>
+    <section class="intro-visual" aria-hidden="true">
+      <div class="intro-mascot-stage">
+        <div class="intro-halo"></div>
+        <svg class="intro-mascot" viewBox="0 0 260 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="BitAgent assistant">
+          <defs>
+            <linearGradient id="visorGrad" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#0A1320"/>
+              <stop offset="1" stop-color="#18263C"/>
+            </linearGradient>
+            <linearGradient id="suitGrad" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#101827"/>
+              <stop offset="1" stop-color="#1D2B42"/>
+            </linearGradient>
+            <radialGradient id="faceGrad" cx="50%" cy="38%" r="62%">
+              <stop offset="0" stop-color="#FFFFFF"/>
+              <stop offset="1" stop-color="#E5E9F0"/>
+            </radialGradient>
+            <filter id="softShadow" x="-30%" y="-20%" width="160%" height="150%">
+              <feDropShadow dx="0" dy="18" stdDeviation="14" flood-color="#0B1220" flood-opacity=".18"/>
+            </filter>
+          </defs>
+          <ellipse cx="130" cy="328" rx="48" ry="10" fill="#0B1220" opacity=".14"/>
+          <g filter="url(#softShadow)">
+            <path d="M78 153c-18 23-25 63-22 105 3 46 24 66 74 66s71-20 74-66c3-42-4-82-22-105H78Z" fill="url(#suitGrad)"/>
+            <path d="M77 160c17 14 88 14 106 0l-11-21H88l-11 21Z" fill="#172338"/>
+            <path d="M82 168c21 18 75 21 96 0" fill="none" stroke="#12CEAE" stroke-width="4" stroke-linecap="round" opacity=".75"/>
+            <path d="M63 183c-21 22-28 58-24 78 2 11 15 10 17-1 5-29 13-50 29-65l-22-12Z" fill="#172338"/>
+            <path d="M197 183c21 22 28 58 24 78-2 11-15 10-17-1-5-29-13-50-29-65l22-12Z" fill="#172338"/>
+            <path d="M74 274c-3 19-5 35-3 46h30c3-16 3-31 2-46H74Z" fill="#151F31"/>
+            <path d="M157 274c-1 15-1 30 2 46h30c2-11 0-27-3-46h-29Z" fill="#151F31"/>
+            <path d="M68 326h38c5 0 9 4 9 9v3H59v-3c0-5 4-9 9-9Z" fill="#0B1220"/>
+            <path d="M154 326h38c5 0 9 4 9 9v3h-56v-3c0-5 4-9 9-9Z" fill="#0B1220"/>
+            <path d="M87 42c10-16 28-25 43-25s33 9 43 25c17 4 30 19 32 38 3 34-23 65-75 65S52 114 55 80c2-19 15-34 32-38Z" fill="url(#faceGrad)"/>
+            <path d="M75 63c25-16 85-17 110 0v36c-30 16-80 16-110 0V63Z" fill="url(#visorGrad)"/>
+            <path d="M86 73c22-8 66-9 88 0" stroke="#12CEAE" stroke-width="3" stroke-linecap="round" opacity=".75"/>
+            <text x="130" y="91" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800" fill="#E8FFF9">B</text>
+            <circle cx="103" cy="118" r="4" fill="#C9D0DB"/>
+            <circle cx="157" cy="118" r="4" fill="#C9D0DB"/>
+            <path d="M111 132c9 7 29 7 38 0" stroke="#C9D0DB" stroke-width="3" stroke-linecap="round" fill="none"/>
+            <path d="M90 191h80" stroke="#FF4D67" stroke-width="5" stroke-linecap="round"/>
+            <path d="M101 217h58" stroke="#12CEAE" stroke-width="4" stroke-linecap="round" opacity=".9"/>
+          </g>
+        </svg>
+      </div>
+    </section>
+    <button class="intro-enter" onclick="skipIntro()">Enter Platform</button>
+  </div>
+</div>
+
+<!-- CONNECT SCREEN -->
+<div id="connectScreen" class="hide">
+  <div class="connect-card">
+    <div class="connect-top">
+      <div class="connect-logo">
+        <svg class="connect-logo-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="7" y="7" width="86" height="86" rx="22" fill="#0B0E11"/>
+          <rect x="7" y="7" width="86" height="86" rx="22" fill="none" stroke="#1E2530" stroke-width="2"/>
+          <path d="M31 76V24h25c10 0 16 5 16 13.5 0 6-3.4 10.5-9.2 12.4C70.5 51.8 75 56.8 75 64c0 8.8-7 12-18.5 12H31Z" fill="#101820" stroke="#00D4AA" stroke-width="5" stroke-linejoin="round"/>
+          <path d="M43 41h12c4 0 6-1.8 6-5s-2-5-6-5H43v10Zm0 28h14c4.5 0 7-2 7-5.5S61.5 58 57 58H43v11Z" fill="#E0E6F0"/>
+          <path d="M24 77h52" stroke="#00D4AA" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <div class="connect-brand">
+          <span class="connect-brand-name">BITAGENT</span>
+          <span class="connect-brand-sub">AI Trading Risk Cockpit</span>
+        </div>
+      </div>
+      <div class="connect-headline">Connect Your Bitget Account</div>
+      <div class="connect-desc">Your API keys stay scoped to this browser session. Live orders require explicit unlock, preview, and confirmation.</div>
+    </div>
+    <div class="connect-body">
+      <div class="connect-field">
+        <label class="connect-label" for="inputSymbol">Trading Pair</label>
+        <select class="connect-input" id="inputSymbol" style="cursor:pointer">
+          <!-- Populated by rebuildConnectSelect() on page load -->
+        </select>
+      </div>
+      <div class="connect-field">
+        <label class="connect-label" for="inputApiKey">API Key</label>
+        <input class="connect-input" id="inputApiKey" type="text" placeholder="bg_xxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="connect-field">
+        <label class="connect-label" for="inputSecretKey">Secret Key</label>
+        <input class="connect-input" id="inputSecretKey" type="password" placeholder="Your secret key" autocomplete="off">
+      </div>
+      <div class="connect-field">
+        <label class="connect-label" for="inputPassphrase">Passphrase</label>
+        <input class="connect-input" id="inputPassphrase" type="password" placeholder="Your API passphrase" autocomplete="off">
+      </div>
+      <div class="connect-field" style="margin-bottom:18px">
+        <label class="connect-label" for="inputBudget">Paper / Account Budget (USDT) <span style="font-size:10px;color:var(--txt3);font-weight:400">optional fallback</span></label>
+        <input class="connect-input" id="inputBudget" type="number" min="0" step="1" placeholder="e.g. 100  (optional fallback)">
+      </div>
+      <div class="connect-notice">
+        <span class="connect-notice-icon">◈</span>
+        <span class="connect-notice-txt">
+          Use a <strong>Futures sub-account API key</strong> with <strong>Read + Trade</strong> permissions only. Never grant withdrawal permissions. This is not financial advice.
+        </span>
+      </div>
+      <button class="connect-btn" id="connectBtn" onclick="doConnect()">
+        Connect My Account
+      </button>
+      <div class="connect-error" id="connectError" role="alert" aria-live="polite"></div>
+    </div>
+    <div class="connect-footer">
+      <span class="connect-footer-txt">
+        Get API keys at <a href="#" onclick="return false">Bitget → Account → API Management</a>
+      </span>
+    </div>
+  </div>
+</div>
+
+<script src="/static/runtime-state.js?v=20260624-1" defer></script>
+<script src="/static/api-client.js?v=20260624-1" defer></script>
+<script src="/static/market-rendering.js?v=20260624-1" defer></script>
+<script src="/static/history-rendering.js?v=20260624-1" defer></script>
+<script src="/static/app.js?v=20260624-1" defer></script>
+
+<!-- Symbol dropdown — rendered at body level to escape backdrop-filter stacking context. Populated by rebuildSymbolDrop(). -->
+<div class="symbol-drop hide" id="symbolDrop"></div>
+
+<!-- Budget popover — at body level to escape header stacking context -->
+<div id="budgetPop" style="display:none;position:fixed;z-index:9999;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:0 8px 32px #000a;min-width:220px">
+  <div style="font-size:11px;color:var(--txt3);margin-bottom:8px">Set optional budget fallback (USDT)</div>
+  <div style="display:flex;gap:6px">
+    <input id="budgetInput" type="number" min="0" step="1" placeholder="e.g. 100"
+      style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--txt);border-radius:6px;padding:6px 10px;font-size:13px;outline:none">
+    <button onclick="applyBudget()" style="background:var(--teal);color:#000;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">Set</button>
+  </div>
+  <div style="font-size:10px;color:var(--txt3);margin-top:6px">Used when exchange balance is $0 (e.g. Unified Account)</div>
+</div>
+</body>
+</html>

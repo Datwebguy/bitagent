@@ -1,0 +1,9 @@
+timestamp,trading_pair,direction,price,quantity,account_balance_change,mode,confidence,order_id,detail
+2026-06-24T01:11:43.904871+00:00,BTC/USDT,LONG,62919.7,0.0016,0.0,paper,65,paper,"paper 0.0016 @ ~$62,919.7"
+2026-06-24T01:13:35.474924+00:00,BTC/USDT,CLOSE,62944.2,0.0016,0.139,paper,50,paper,paper close long 0.0016
+2026-06-24T01:29:18.970441+00:00,BTC/USDT,LONG,62857.3,0.0016,0.0,paper,62,paper,"paper 0.0016 @ ~$62,857.3"
+2026-06-24T01:33:11.741862+00:00,BTC/USDT,CLOSE,63026.1,0.0016,0.1451,paper,50,paper,paper close long 0.0016
+2026-06-24T01:44:06.534777+00:00,BTC/USDT,LONG,62935.4,0.0016,0.0,paper,65,paper,"paper 0.0016 @ ~$62,935.4"
+2026-06-24T01:45:50.062098+00:00,BTC/USDT,CLOSE,62923.5,0.0016,-0.0674,paper,50,paper,paper close long 0.0016
+2026-06-24T01:53:03.383631+00:00,BTC/USDT,LONG,62965.6,0.0016,0.0,paper,65,paper,"paper 0.0016 @ ~$62,965.6"
+2026-06-24T01:56:43.539677+00:00,BTC/USDT,CLOSE,62955.0,0.0016,0.0,paper,50,paper,paper close long 0.0016

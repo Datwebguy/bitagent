@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+*.log
+data/
+agent_log.jsonl
+test_run.py
+.chrome*/
+tmp/
+tmp-*.png
+playbooks/

@@ -1,0 +1,20 @@
+app = "bitagent"
+primary_region = "dfw"
+
+[build]
+
+[env]
+  PORT = "8000"
+  EXEC_MODE = "paper"
+  PAPER_BALANCE = "10000"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  min_machines_running = 1
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
